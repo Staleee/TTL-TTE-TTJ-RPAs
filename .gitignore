@@ -1,0 +1,21 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Don't track chromedriver binary (each dev downloads their own)
+Egypt_visa_form_RPA/bin/chromedriver
+Egypt_visa_form_RPA/bin/chromedriver.exe

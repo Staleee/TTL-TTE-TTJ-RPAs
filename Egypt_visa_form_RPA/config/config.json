@@ -1,0 +1,82 @@
+{
+  "browser": {
+    "type": "chrome",
+    "headless": false,
+    "window_size": {
+      "width": 1920,
+      "height": 1080
+    },
+    "page_load_timeout": 30,
+    "implicit_wait": 10
+  },
+  "url": "https://dubai.egyptconsulates.org/new-forms/visas.html",
+  "output": {
+    "pdf_directory": "output",
+    "screenshot_directory": "screenshots",
+    "filename_format": "{first_name}_{family_name}_{timestamp}.pdf"
+  },
+  "qr_settings": {
+    "wait_timeout": 30,
+    "verification_enabled": true,
+    "network_idle_timeout": 15,
+    "poll_interval": 1.5,
+    "max_retries": 3
+  },
+  "form_selectors": {
+    "first_name": "input[name='name']",
+    "middle_name": "input[name='arName']",
+    "family_name": "input[name='title']",
+    "date_of_birth_month": "select[name='birthday[month]']",
+    "date_of_birth_day": "select[name='birthday[day]']",
+    "date_of_birth_year": "select[name='birthday[year]']",
+    "place_of_birth": "input[name='placeOfBirth']",
+    "sex": "select[name='gender']",
+    "marital_status": "select[name='husband_status']",
+    "present_nationality": "input[name='currentNationality']",
+    "nationality_of_origin": "input[name='mainNationality']",
+    "occupation_arabic": "input[name='arJob']",
+    "passport_number": "input[name='current_passport_NO']",
+    "passport_type": "input[name='passeport_type']",
+    "issued_at": "input[name='passeport_place']",
+    "issued_on": "input[name='date_issue']",
+    "expires_on": "input[name='end_issue']",
+    "permanent_address": "input[name='address']",
+    "present_address": "input[name='egCurrentAddress']",
+    "visa_type": "select[name='visaType']",
+    "duration_of_stay": "input[name='durationOfStay']",
+    "date_of_arrival": "input[name='date_visit']",
+    "purpose_of_visit": "input[name='purposeOfTravel']",
+    "address_in_egypt": "input[name='egAddress']",
+    "port_of_entry": "input[name='entryToEgypt']",
+    "phone_number": "input[name='phone']",
+    "relative_name": "input[name='arPersonName_0']",
+    "relative_address": "input[name='arAddressName_0']",
+    "add_relative_button": "button.add-relative",
+    "create_print_button": "button[type='submit']",
+    "print_button": "button.print-form"
+  },
+  "sex_mapping": {
+    "Male": "ذكر / Male",
+    "Female": "انثي / Female"
+  },
+  "marital_status_mapping": {
+    "Single": "أعزب / Single",
+    "Married": "متزوج / Married",
+    "Widow": "أرمل / Widow / Widower",
+    "Widower": "أرمل / Widow / Widower"
+  },
+  "visa_type_mapping": {
+    "Single": "مفردة / Single",
+    "Multiple": "متعددة / Multiple"
+  },
+  "timeouts": {
+    "element_wait": 10,
+    "page_load": 30,
+    "pdf_generation": 15
+  },
+  "retry": {
+    "max_attempts": 3,
+    "delay_seconds": 2
+  }
+}
+

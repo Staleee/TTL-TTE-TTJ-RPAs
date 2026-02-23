@@ -1,0 +1,214 @@
+Opening https://dubai.egyptconsulates.org/new-forms/visas.html...
+
+================================================================================
+FORM FIELD INSPECTION
+================================================================================
+
+--- INPUT FIELDS ---
+
+1. Type: text      
+   name="name"
+   Selector: input[name='name']
+
+2. Type: text      
+   name="arName"
+   Selector: input[name='arName']
+
+3. Type: text      
+   name="title"
+   Selector: input[name='title']
+
+4. Type: hidden    
+   name="birthday"
+   Selector: input[name='birthday']
+   id="date_birthday"
+   Selector: #date_birthday
+
+5. Type: text      
+   name="placeOfBirth"
+   Selector: input[name='placeOfBirth']
+
+6. Type: text      
+   name="currentNationality"
+   Selector: input[name='currentNationality']
+
+7. Type: text      
+   name="mainNationality"
+   Selector: input[name='mainNationality']
+
+8. Type: text      
+   name="arJob"
+   Selector: input[name='arJob']
+
+9. Type: text      
+   name="current_passport_NO"
+   Selector: input[name='current_passport_NO']
+   id="current_passport_NO"
+   Selector: #current_passport_NO
+
+10. Type: text      
+   name="passeport_type"
+   Selector: input[name='passeport_type']
+
+11. Type: text      
+   name="passeport_place"
+   Selector: input[name='passeport_place']
+
+12. Type: hidden    
+   name="date_issue"
+   Selector: input[name='date_issue']
+   id="date_issue"
+   Selector: #date_issue
+
+13. Type: hidden    
+   name="end_issue"
+   Selector: input[name='end_issue']
+   id="end_date_issue"
+   Selector: #end_date_issue
+
+14. Type: text      
+   name="address"
+   Selector: input[name='address']
+
+15. Type: text      
+   name="egCurrentAddress"
+   Selector: input[name='egCurrentAddress']
+
+16. Type: text      
+   name="durationOfStay"
+   Selector: input[name='durationOfStay']
+
+17. Type: hidden    
+   name="date_visit"
+   Selector: input[name='date_visit']
+   id="date_visit"
+   Selector: #date_visit
+
+18. Type: text      
+   name="purposeOfTravel"
+   Selector: input[name='purposeOfTravel']
+
+19. Type: text      
+   name="egAddress"
+   Selector: input[name='egAddress']
+
+20. Type: text      
+   name="entryToEgypt"
+   Selector: input[name='entryToEgypt']
+
+21. Type: text      
+   name="phone"
+   Selector: input[name='phone']
+   id="phone-eg"
+   Selector: #phone-eg
+
+22. Type: text      
+   name="arPersonName_0"
+   Selector: input[name='arPersonName_0']
+   id="arPersonName_0"
+   Selector: #arPersonName_0
+
+23. Type: text      
+   name="arAddressName_0"
+   Selector: input[name='arAddressName_0']
+   id="arDocumnetName_0"
+   Selector: #arDocumnetName_0
+
+
+--- TEXTAREA FIELDS ---
+
+
+--- SELECT DROPDOWNS ---
+
+1.
+   name="birthday[month]"
+   Selector: select[name='birthday[month]']
+   Options: الشهر / Month, يناير / January, فبراير / February...
+
+2.
+   name="birthday[day]"
+   Selector: select[name='birthday[day]']
+   Options: اليوم / Day, 1, 2...
+
+3.
+   name="birthday[year]"
+   Selector: select[name='birthday[year]']
+   Options: السنة / Year, 2041, 2040...
+
+4.
+   name="gender"
+   Selector: select[name='gender']
+   Options: اختر النوع / Choose Gender, ذكر / Male, انثي / Female...
+
+5.
+   name="husband_status"
+   Selector: select[name='husband_status']
+   id="husband_status"
+   Selector: #husband_status
+   Options: الحالة الاجتماعية / Marital Status, أعزب / Single, متزوج / Married...
+
+6.
+   name="birthday[month]"
+   Selector: select[name='birthday[month]']
+   Options: الشهر / Month, يناير / January, فبراير / February...
+
+7.
+   name="birthday[day]"
+   Selector: select[name='birthday[day]']
+   Options: اليوم / Day, 1, 2...
+
+8.
+   name="birthday[year]"
+   Selector: select[name='birthday[year]']
+   Options: السنة / Year, 2041, 2040...
+
+9.
+   name="birthday[month]"
+   Selector: select[name='birthday[month]']
+   Options: الشهر / Month, يناير / January, فبراير / February...
+
+10.
+   name="birthday[day]"
+   Selector: select[name='birthday[day]']
+   Options: اليوم / Day, 1, 2...
+
+11.
+   name="birthday[year]"
+   Selector: select[name='birthday[year]']
+   Options: السنة / Year, 2041, 2040...
+
+12.
+   name="visaType"
+   Selector: select[name='visaType']
+   Options: اختر من واحد - متعدد / Choose from Single - Multiple, متعددة / Multiple, مفردة / Single...
+
+13.
+   name="birthday[month]"
+   Selector: select[name='birthday[month]']
+   Options: الشهر / Month, يناير / January, فبراير / February...
+
+14.
+   name="birthday[day]"
+   Selector: select[name='birthday[day]']
+   Options: اليوم / Day, 1, 2...
+
+15.
+   name="birthday[year]"
+   Selector: select[name='birthday[year]']
+   Options: السنة / Year, 2041, 2040...
+
+
+--- BUTTONS ---
+
+2. Type: reset
+   Text: اعادة التعبئة / Reset form
+   class="cus-btn-reset w-100"
+
+3. Type: submit
+   Text: أنشاء و طباعة النموذج / Create And Print
+   class="cus-btn w-100 text-capitalize"
+
+================================================================================
+
+Inspection complete! Browser will stay open for 30 seconds...
+You can manually inspect the page if needed.

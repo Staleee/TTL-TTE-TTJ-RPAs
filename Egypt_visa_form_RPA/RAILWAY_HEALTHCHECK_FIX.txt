@@ -1,0 +1,138 @@
+================================================================================
+RAILWAY HEALTHCHECK FIX - APPLIED ✅
+================================================================================
+
+ISSUE: Deployment failed on network healthcheck
+
+ROOT CAUSES:
+1. Healthcheck timeout too short (100s → 300s)
+2. App takes time to load Selenium/Chrome dependencies  
+3. Railway checking before app is fully ready
+
+================================================================================
+FIXES APPLIED
+================================================================================
+
+1. railway.toml Updates:
+   ✓ Increased healthcheckTimeout: 100 → 300 seconds
+   ✓ Added --log-level info to gunicorn for better debugging
+   
+2. Dockerfile Updates:
+   ✓ Added Docker HEALTHCHECK with 60s start period
+   ✓ Added curl for healthcheck testing
+   ✓ Better logging (--access-logfile - --error-logfile -)
+   ✓ Proper PORT environment variable binding
+
+================================================================================
+WHAT TO DO NOW
+================================================================================
+
+STEP 1: Commit and Push the Fixes
+----------------------------------
+cd /Users/saharsabbagh/Desktop/Egypt_visa_form_RPA
+
+git add railway.toml Dockerfile
+git commit -m "Fix Railway healthcheck - increase timeout and add Docker healthcheck"
+git push origin main
+
+STEP 2: Wait for Railway to Rebuild
+------------------------------------
+Railway will automatically:
+1. Detect the new commit
+2. Rebuild the container
+3. Deploy with new healthcheck settings
+
+Expected: ✅ Deployment successful!
+
+STEP 3: Monitor the Deployment
+-------------------------------
+In Railway Dashboard:
+1. Go to your project
+2. Click "Deployments"
+3. Watch the logs
+
+You should see:
+✓ Building...
+✓ Chrome installed
+✓ ChromeDriver installed
+✓ Starting gunicorn
+✓ Health check passed ✅
+✓ Deployment live!
+
+================================================================================
+HEALTHCHECK BEHAVIOR
+================================================================================
+
+Old Settings:
+• Timeout: 100 seconds
+• Start checking: Immediately
+• Result: ❌ Failed (app not ready)
+
+New Settings:
+• Timeout: 300 seconds (5 minutes)
+• Start period: 60 seconds (waits before first check)
+• Interval: 30 seconds between checks
+• Result: ✅ Should pass
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+If it STILL fails:
+
+Option 1: Disable Healthcheck Temporarily
+------------------------------------------
+In railway.toml, comment out:
+# healthcheckPath = "/health"
+# healthcheckTimeout = 300
+
+Then uncomment after first successful deploy.
+
+Option 2: Check Logs
+--------------------
+Railway Dashboard → Deployments → Logs
+
+Look for:
+• "Listening at: http://0.0.0.0:8080" (gunicorn started)
+• Any Python errors
+• Chrome/Selenium errors
+
+Option 3: Test Health Endpoint Manually
+----------------------------------------
+After deployment (even if failed):
+curl https://your-app.railway.app/health
+
+If it returns {"status": "healthy"}, the app works but healthcheck timing is off.
+
+================================================================================
+VERIFICATION
+================================================================================
+
+Once deployed successfully:
+
+curl https://your-app.railway.app/health
+
+Expected Response:
+{
+  "status": "healthy",
+  "service": "Egypt Visa Form RPA",
+  "timestamp": "2026-01-16T..."
+}
+
+Then test PDF generation:
+curl -X POST https://your-app.railway.app/generate-visa-pdf \
+  -H "Content-Type: application/json" \
+  -d @data/sample_application.json \
+  --output railway_test.pdf
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. git add railway.toml Dockerfile
+2. git commit -m "Fix Railway healthcheck timeout"
+3. git push origin main
+4. Wait ~5 minutes for Railway rebuild
+5. Test: curl https://your-app.railway.app/health
+
+================================================================================

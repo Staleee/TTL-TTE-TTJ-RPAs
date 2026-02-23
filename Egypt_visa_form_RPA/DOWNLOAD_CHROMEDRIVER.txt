@@ -1,0 +1,35 @@
+================================================================================
+DOWNLOAD CORRECT CHROMEDRIVER FOR YOUR CHROME VERSION 144
+================================================================================
+
+Your Chrome browser version: 144.0.7559.60
+ChromeDriver version needed: 144.0.7559.60
+
+DOWNLOAD LINK (use your browser):
+https://storage.googleapis.com/chrome-for-testing-public/144.0.7559.60/mac-arm64/chromedriver-mac-arm64.zip
+
+================================================================================
+AFTER DOWNLOADING:
+================================================================================
+
+1. The file will be in your Downloads folder as: chromedriver-mac-arm64.zip
+
+2. Run these commands in Terminal:
+
+cd /Users/saharsabbagh/Desktop/Egypt_visa_form_RPA
+unzip ~/Downloads/chromedriver-mac-arm64.zip -d ~/Downloads/
+mv ~/Downloads/chromedriver-mac-arm64/chromedriver bin/chromedriver
+chmod +x bin/chromedriver
+xattr -d com.apple.quarantine bin/chromedriver
+rm -rf ~/Downloads/chromedriver-mac-arm64
+
+3. Verify it works:
+
+./bin/chromedriver --version
+
+4. Run the automation:
+
+python3 main.py
+
+================================================================================
+

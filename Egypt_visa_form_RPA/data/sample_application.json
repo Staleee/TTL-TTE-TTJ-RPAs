@@ -1,0 +1,46 @@
+{
+  "personal_info": {
+    "first_name": "Sarah",
+    "middle_name": "Ahmed",
+    "family_name": "Hassan",
+    "date_of_birth": "1990-05-20",
+    "place_of_birth": "Dubai",
+    "sex": "Female",
+    "marital_status": "Single"
+  },
+  "nationality": {
+    "present_nationality": "Emirati",
+    "nationality_of_origin": "Emirati"
+  },
+  "occupation": {
+    "occupation_arabic": "طبيبة"
+  },
+  "passport": {
+    "passport_number": "E987654321",
+    "passport_type": "Regular",
+    "issued_at": "Dubai",
+    "issued_on": "2021-06-10",
+    "expires_on": "2031-06-10"
+  },
+  "addresses": {
+    "permanent_address": "Palm Jumeirah, Dubai, UAE",
+    "present_address": "Marina District, Dubai, UAE"
+  },
+  "visa_details": {
+    "visa_type": "Multiple",
+    "duration_of_stay": "90 days",
+    "date_of_arrival": "2026-02-15",
+    "purpose_of_visit": "Business",
+    "address_in_egypt": "Four Seasons Hotel, Cairo",
+    "port_of_entry": "Cairo International Airport"
+  },
+  "contact": {
+    "phone_number": "+971501234567"
+  },
+  "relatives_in_egypt": [
+    {
+      "full_name": "Fatima Ali",
+      "address": "Zamalek, Cairo, Egypt"
+    }
+  ]
+}

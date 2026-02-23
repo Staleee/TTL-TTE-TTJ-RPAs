@@ -1,0 +1,38 @@
+{
+  "accompany_name": "John Smith",
+  "personal_info": {
+    "first_name": "SAHAR",
+    "middle_name": "MICHAEL",
+    "last_name": "SMITH",
+    "place_of_birth": "LONDON, UK",
+    "date_of_birth": "15/03/1985",
+    "mobile": "+971 50 123 4567",
+    "present_nationality": "BRITISH",
+    "nationality_of_origin": "BRITISH"
+  },
+  "passport_info": {
+    "passport_number": "AB1234567",
+    "issuing_country": "UNITED KINGDOM",
+    "expiry_date": "15/03/2030"
+  },
+  "residence_info": {
+    "uae_address": "123 Sheikh Zayed Road, Dubai, UAE",
+    "uae_residency_expiry": "31/12/2026"
+  },
+  "travel_history": {
+    "visa_refusal_details": "No",
+    "lebanon_previous_visits": "No",
+    "criminal_record_details": "No"
+  },
+  "trip_info": {
+    "departure_date_from_dubai": "01/02/2026",
+    "arrival_date_to_dubai": "15/02/2026"
+  },
+  "accommodation_info": {
+    "contact_person": "Hotel Phoenicia, +961 1 369 100",
+    "lebanon_address": "Hotel Phoenicia, Beirut, Lebanon"
+  },
+  "visa_info": {
+    "type": "two_entry"
+  }
+}
