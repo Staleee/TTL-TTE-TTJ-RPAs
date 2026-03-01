@@ -164,6 +164,11 @@ def fill_checkboxes(page, data: dict):
             x, y = FIELD_COORDINATES[checkbox_key]
             insert_checkbox(page, x, y)
 
+    # Purpose of Trip: hardcoded to Tourism
+    if "checkbox_tourism" in FIELD_COORDINATES:
+        x, y = FIELD_COORDINATES["checkbox_tourism"]
+        insert_checkbox(page, x, y)
+
 
 def translate_to_arabic(text: str) -> str:
     """Translate text to Arabic using Google Translate."""
@@ -253,6 +258,11 @@ def insert_arabic_text(page, x: float, y: float, text: str, fontsize: int = FONT
 
 def fill_text_fields(page, data: dict):
     """Fill all text fields based on data values."""
+    # Job title (Title/Position): hardcoded to Domestic Worker
+    if "job_title" in FIELD_COORDINATES:
+        x, y = FIELD_COORDINATES["job_title"]
+        insert_text(page, x, y, "Domestic Worker")
+
     for json_path, coord_key in TEXT_FIELD_MAPPINGS.items():
         value = get_nested_value(data, json_path)
         if value and coord_key in FIELD_COORDINATES:
