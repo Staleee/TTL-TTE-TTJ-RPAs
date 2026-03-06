@@ -16,9 +16,9 @@
     "filename_format": "{first_name}_{family_name}_{timestamp}.pdf"
   },
   "qr_settings": {
-    "wait_timeout": 30,
+    "wait_timeout": 15,
     "verification_enabled": true,
-    "network_idle_timeout": 15,
+    "network_idle_timeout": 8,
     "poll_interval": 1.5,
     "max_retries": 3
   },

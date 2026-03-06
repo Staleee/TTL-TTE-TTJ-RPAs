@@ -283,7 +283,7 @@ class PDFGenerator:
         
         try:
             # Wait for the form to be ready
-            time.sleep(2)
+            time.sleep(1)
             
             # PHASE 1: Get initial QR state (before submission)
             self.logger.info("📸 Capturing initial page state...")
@@ -338,7 +338,7 @@ class PDFGenerator:
             
             # Scroll into view and click
             self.driver.execute_script("arguments[0].scrollIntoView(true);", button)
-            time.sleep(1)
+            time.sleep(0.5)
             
             click_time = time.time()
             button.click()
@@ -360,11 +360,11 @@ class PDFGenerator:
             # Additional wait after QR appears to ensure it's fully rendered
             if qr_updated:
                 self.logger.info("⏳ Allowing extra time for QR rendering...")
-                time.sleep(3)
+                time.sleep(1.5)
             else:
                 # If update detection failed, use fallback timing
                 self.logger.warning("⚠ QR update detection inconclusive - using fallback wait")
-                time.sleep(5)
+                time.sleep(2.5)
             
             # PHASE 5: Verify QR code presence and optionally decode
             final_qr_info = self.get_qr_image_info()
@@ -438,11 +438,11 @@ class PDFGenerator:
             
             # Extra wait to ensure QR code and all content is fully rendered
             self.logger.info("Waiting for complete form rendering (including QR code)...")
-            time.sleep(5)
+            time.sleep(2)
             
             # Scroll to top to ensure proper rendering
             self.driver.execute_script("window.scrollTo(0, 0);")
-            time.sleep(1)
+            time.sleep(0.5)
             
             # Use Chrome DevTools Protocol to print to PDF with optimized settings
             # Settings optimized to capture full page width and high-quality QR codes

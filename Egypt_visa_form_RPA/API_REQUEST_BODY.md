@@ -86,6 +86,48 @@ Send a **POST** to `/generate-visa-pdf` with header **`Content-Type: application
 | | port_of_entry | Yes | e.g. `"Cairo International Airport"` |
 | **contact** | phone_number | Yes | e.g. `"+1234567890"` |
 | **relatives_in_egypt** | (array) | No | List of `{ "full_name": "...", "address": "..." }` |
+| **callback_url** | (top-level) | No | Your receive-API URL. We POST the PDF + record_id here when done (two-API flow). |
+| **record_id** | (top-level) | No | Zoho (or your) record ID. We send it back in the callback so your API can attach the PDF to this record. |
+
+---
+
+## Two-API flow (Zoho: trigger + receive)
+
+Use **two APIs** so Zoho never waits for the slow PDF:
+
+1. **API 1 – Trigger (Zoho calls us)**  
+   Zoho sends one request with visa data + **`callback_url`** (your receive-API URL) + **`record_id`** (the Zoho record to attach the PDF to). We return **202** immediately and build the PDF in the background.
+
+2. **API 2 – Receive (we call Zoho)**  
+   You expose an endpoint that accepts POST. When the PDF is ready, we POST to your **`callback_url`** with the PDF and **`record_id`**. Your API uses **`record_id`** to upload/attach the application to that record.
+
+**Request body from Zoho (API 1 – trigger):**
+
+```json
+{
+  "callback_url": "https://your-zoho-receive-api.com/upload-egypt-visa",
+  "record_id": "1234567890123456789",
+  "personal_info": { "first_name": "...", ... },
+  "nationality": { ... },
+  "occupation": { "occupation_arabic": "..." },
+  "passport": { ... },
+  "addresses": { ... },
+  "visa_details": { ... },
+  "contact": { ... },
+  "relatives_in_egypt": [ ... ]
+}
+```
+
+**What we send to your receive API (API 2):**
+
+- **Success:** `POST` to `callback_url` with:
+  - **Content-Type:** `multipart/form-data`
+  - **Fields:** `document` (PDF file), `status=success`, `applicant_name=...`, **`record_id`** (same value you sent)
+- **Failure:** `POST` to `callback_url` with:
+  - **Content-Type:** `application/json`
+  - **Body:** `{ "status": "error", "error": "...", "timestamp": "...", "record_id": "..." }`
+
+Your receive API should: read **`record_id`** and the PDF, then upload the PDF to that Zoho record. No need to call our API again.
 
 ---
 

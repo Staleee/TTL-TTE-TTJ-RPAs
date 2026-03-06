@@ -179,7 +179,7 @@ class EgyptVisaFormAutomation:
         url = self.config['url']
         self.logger.info(f"Navigating to {url}")
         self.driver.get(url)
-        time.sleep(2)  # Allow page to fully load
+        time.sleep(1)  # Allow page to fully load
         self.logger.info("Page loaded successfully")
     
     def fill_text_field(self, field_name: str, value: str, required: bool = True):
@@ -529,7 +529,7 @@ class VisaFormFiller:
                         EC.element_to_be_clickable((By.CSS_SELECTOR, add_button_selector))
                     )
                     add_button.click()
-                    time.sleep(1)  # Wait for new fields to appear
+                    time.sleep(0.5)  # Wait for new fields to appear
                     
                     # Fill the new fields (implementation depends on form structure)
                     # This might need adjustment based on actual form behavior
