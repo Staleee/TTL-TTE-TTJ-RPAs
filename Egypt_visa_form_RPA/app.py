@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 
 CALLBACK_TIMEOUT = 60
 
+# In-memory job status (keyed by record_id) so you can poll when callback was triggered. Lost on restart.
+_job_status = {}
+_job_status_lock = threading.Lock()
 
 # Meta keys we strip from the request body (not part of visa application data)
 META_KEYS = frozenset({'callback_url', 'record_id'})
@@ -36,7 +39,14 @@ META_KEYS = frozenset({'callback_url', 'record_id'})
 
 def _run_generate_and_callback(application_data: dict, callback_url: str, record_id: str = None):
     """Background: generate PDF then POST to callback_url with PDF + record_id (for Zoho to attach to record)."""
+    rid = (record_id and str(record_id).strip()) or None
+    logger.info(f"[record_id={rid}] BACKGROUND THREAD STARTED - will callback to {callback_url}")
+    if rid:
+        with _job_status_lock:
+            _job_status[rid] = {'status': 'processing', 'started_at': datetime.now().isoformat(), 'callback_sent': False}
+
     try:
+        logger.info(f"[record_id={rid}] Starting PDF generation...")
         app_obj = VisaApplication(application_data)
         config_path = Path('config/config.json')
         automation = EgyptVisaFormAutomation(config_path)
@@ -52,39 +62,66 @@ def _run_generate_and_callback(application_data: dict, callback_url: str, record
                 pdf_data = f.read()
             pdf_path.unlink()
             filename = app_obj.get_output_filename()
+            logger.info(f"[record_id={rid}] PDF ready ({len(pdf_data)} bytes), triggering callback to {callback_url}...")
             # POST PDF to Zoho's receive API: document + record_id so they can upload to that record
             files = {'document': (filename, pdf_data, 'application/pdf')}
             data = {
                 'status': 'success',
                 'applicant_name': f"{app_obj.first_name} {app_obj.family_name}",
             }
-            if record_id is not None and str(record_id).strip():
-                data['record_id'] = str(record_id).strip()
+            if rid:
+                data['record_id'] = rid
             r = requests.post(callback_url, files=files, data=data, timeout=CALLBACK_TIMEOUT)
-            logger.info(f"Callback to {callback_url} (record_id={record_id}) -> {r.status_code}")
+            logger.info(f"[record_id={rid}] Callback TRIGGERED -> {callback_url} returned status {r.status_code}")
+            if rid:
+                with _job_status_lock:
+                    _job_status[rid] = {
+                        'status': 'done',
+                        'callback_sent': True,
+                        'callback_status_code': r.status_code,
+                        'finished_at': datetime.now().isoformat(),
+                    }
         finally:
             try:
                 automation.quit()
             except Exception:
                 pass
     except Exception as e:
-        logger.exception("Background PDF generation failed")
+        logger.exception(f"[record_id={rid}] PDF generation failed: {e}")
+        if rid:
+            with _job_status_lock:
+                _job_status[rid] = {
+                    'status': 'failed',
+                    'error': str(e),
+                    'finished_at': datetime.now().isoformat(),
+                    'callback_sent': False,
+                }
         try:
             payload = {
                 'status': 'error',
                 'error': str(e),
                 'timestamp': datetime.now().isoformat(),
             }
-            if record_id is not None and str(record_id).strip():
-                payload['record_id'] = str(record_id).strip()
-            requests.post(
+            if rid:
+                payload['record_id'] = rid
+            logger.info(f"[record_id={rid}] Sending error to callback URL...")
+            r = requests.post(
                 callback_url,
                 json=payload,
                 headers={'Content-Type': 'application/json'},
                 timeout=CALLBACK_TIMEOUT
             )
+            logger.info(f"[record_id={rid}] Error callback TRIGGERED -> {callback_url} returned status {r.status_code}")
+            if rid:
+                with _job_status_lock:
+                    _job_status[rid]['callback_sent'] = True
+                    _job_status[rid]['callback_status_code'] = r.status_code
         except Exception as cb_err:
-            logger.error(f"Failed to send error to callback: {cb_err}")
+            logger.error(f"[record_id={rid}] Failed to send error to callback: {cb_err}")
+            if rid:
+                with _job_status_lock:
+                    _job_status[rid]['callback_sent'] = False
+                    _job_status[rid]['callback_error'] = str(cb_err)
 
 
 @app.route('/health', methods=['GET'])
@@ -94,6 +131,29 @@ def health_check():
         'status': 'healthy',
         'service': 'Egypt Visa Form RPA',
         'timestamp': datetime.now().isoformat()
+    }), 200
+
+
+@app.route('/job-status', methods=['GET'])
+def job_status():
+    """
+    Poll this to see when the callback was triggered for a given record_id.
+    Only works when you sent record_id in the trigger request.
+    """
+    record_id = (request.args.get('record_id') or '').strip()
+    if not record_id:
+        return jsonify({'error': 'Missing query param: record_id'}), 400
+    with _job_status_lock:
+        info = _job_status.get(record_id)
+    if info is None:
+        return jsonify({
+            'record_id': record_id,
+            'status': 'unknown',
+            'message': 'No job found for this record_id (maybe not started yet, or server restarted)'
+        }), 200
+    return jsonify({
+        'record_id': record_id,
+        **info,
     }), 200
 
 
@@ -199,7 +259,8 @@ def index():
         'service': 'Egypt Visa Form RPA API',
         'version': '1.0',
         'endpoints': {
-            'POST /generate-visa-pdf': 'Generate visa PDF from JSON data',
+            'POST /generate-visa-pdf': 'Generate visa PDF (sync or async with callback_url + record_id)',
+            'GET /job-status?record_id=xxx': 'Poll to see when callback was triggered for that record_id',
             'GET /health': 'Health check endpoint',
             'GET /': 'This documentation'
         },

@@ -77,10 +77,47 @@ So your receive API should:
 
 ---
 
-## 5. Summary
+## 5. How do I know when the callback was triggered?
+
+**Option A – Poll our job-status (recommended)**  
+We keep status per `record_id` (in memory; lost on server restart). After you trigger with a `record_id`, poll:
+
+```http
+GET https://your-egypt-rpa.railway.app/job-status?record_id=YOUR_RECORD_ID
+```
+
+Response when still processing:
+```json
+{ "record_id": "123...", "status": "processing", "started_at": "...", "callback_sent": false }
+```
+
+Response when done and callback was sent:
+```json
+{ "record_id": "123...", "status": "done", "callback_sent": true, "callback_status_code": 200, "finished_at": "..." }
+```
+
+Response when PDF failed (we still call your URL with error JSON):
+```json
+{ "record_id": "123...", "status": "failed", "error": "...", "callback_sent": true, "callback_status_code": 200, "finished_at": "..." }
+```
+
+So: **when `status` is `done` or `failed` and `callback_sent` is `true`, we have already called your callback URL.**
+
+**Option B – Rely on your receive API**  
+When we POST to your URL, your endpoint runs. So if you log there or update the record (attach file or save error), you know the callback was triggered because your code ran.
+
+**Option C – Railway logs**  
+In Railway → your Egypt service → Deployments → View logs. Look for lines like:
+- `[record_id=xxx] PDF ready (...), triggering callback to ...`
+- `[record_id=xxx] Callback TRIGGERED -> ... returned status 200`
+
+---
+
+## 6. Summary
 
 | Question | Answer |
 |----------|--------|
 | How do you send the file? | Single POST, **multipart/form-data**, file in field **`document`**, plus form fields **`record_id`**, **`applicant_name`**, **`status`**. |
 | Do I need to trigger the callback? | **No.** We call your `callback_url` automatically when the job is done (success or error). |
+| How do I know when it was triggered? | Poll **GET /job-status?record_id=xxx** until `status` is `done` or `failed` and `callback_sent` is `true`. Or check your receive API logs / Railway logs. |
 | What do I build? | One receive endpoint that accepts POST, parses multipart (or JSON on error), and uses **`record_id`** to attach the PDF to the right record. |
