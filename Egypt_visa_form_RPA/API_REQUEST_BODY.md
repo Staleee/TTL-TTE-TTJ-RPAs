@@ -87,7 +87,31 @@ Send a **POST** to `/generate-visa-pdf` with header **`Content-Type: application
 | **contact** | phone_number | Yes | e.g. `"+1234567890"` |
 | **relatives_in_egypt** | (array) | No | List of `{ "full_name": "...", "address": "..." }` |
 | **callback_url** | (top-level) | No | Your receive-API URL. We POST the PDF + record_id here when done (two-API flow). |
-| **record_id** | (top-level) | No | Zoho (or your) record ID. We send it back in the callback so your API can attach the PDF to this record. |
+| **record_id** | (top-level) | No | Zoho record ID. When Zoho credentials are set (see below), we upload the PDF directly to this record. No callback_url needed. |
+
+---
+
+## Zoho direct upload (record_id only, no callback_url)
+
+When **ZOHO_ACCESS_TOKEN** (and optionally **ZOHO_REFRESH_TOKEN** + **ZOHO_CLIENT_ID** + **ZOHO_CLIENT_SECRET**) are set in the environment, you can send **only `record_id`** and the visa data. We return **202** and upload the PDF directly to that Zoho Creator record using the [Upload File API v2.1](https://www.zoho.com/creator/help/api/v2.1/upload-file.html). No Receive API or callback_url needed.
+
+**Request body (Zoho script):**
+
+```json
+{
+  "record_id": "4525902000012879003",
+  "personal_info": { "first_name": "Sarah", ... },
+  "nationality": { ... },
+  "occupation": { "occupation_arabic": "..." },
+  "passport": { ... },
+  "addresses": { ... },
+  "visa_details": { ... },
+  "contact": { ... },
+  "relatives_in_egypt": [ ... ]
+}
+```
+
+**Environment variables (Railway or .env):** see **ZOHO_CREDENTIALS.md**.
 
 ---
 
@@ -128,6 +152,49 @@ Use **two APIs** so Zoho never waits for the slow PDF:
   - **Body:** `{ "status": "error", "error": "...", "timestamp": "...", "record_id": "..." }`
 
 Your receive API should: read **`record_id`** and the PDF, then upload the PDF to that Zoho record. No need to call our API again.
+
+---
+
+## Zoho Upload File API v2.1 (recommended if you get UPLOAD_RULE_NOT_CONFIGURED)
+
+If your Zoho **Receive API** returns `UPLOAD_RULE_NOT_CONFIGURED` (code 2945), use Zoho’s **Upload File API v2.1** instead. We then POST the PDF directly to the record’s file field (no Receive API needed).
+
+**1. Build the upload URL** (with literal `{record_id}` in it; we replace it with the real ID):
+
+```
+https://www.zohoapis.com/creator/v2.1/data/<account_owner_name>/<app_link_name>/report/<report_link_name>/{record_id}/<field_link_name>/upload
+```
+
+Example (replace account, app, report, and field link names with yours):
+
+```
+https://www.zohoapis.com/creator/v2.1/data/louay.sallakho_maids/YourApp/report/Copy_of_Tourist_Visas_Travel_to_Lebanon/{record_id}/Visa_Application/upload
+```
+
+**2. Send that URL as `callback_url` and provide the OAuth token:**
+
+- **In the request body:** add **`zoho_oauthtoken`** with your Zoho Creator OAuth access token (scope `ZohoCreator.report.CREATE`), **or**
+- **In the environment:** set **`ZOHO_OAUTH_TOKEN`** (e.g. on Railway) so you don’t put the token in the body.
+
+**Example trigger body (Zoho Upload API v2.1):**
+
+```json
+{
+  "callback_url": "https://www.zohoapis.com/creator/v2.1/data/louay.sallakho_maids/YourApp/report/Copy_of_Tourist_Visas_Travel_to_Lebanon/{record_id}/Visa_Application/upload",
+  "record_id": "4525902000012879003",
+  "zoho_oauthtoken": "1000.xxxxxxxx.xxxxxxxx",
+  "personal_info": { "first_name": "Sarah", ... },
+  "nationality": { ... },
+  "occupation": { "occupation_arabic": "..." },
+  "passport": { ... },
+  "addresses": { ... },
+  "visa_details": { ... },
+  "contact": { ... },
+  "relatives_in_egypt": [ ... ]
+}
+```
+
+We will replace `{record_id}` with the value you send, then POST the PDF with `Authorization: Zoho-oauthtoken <token>` and the file in the `file` field. No Receive API or upload rule is required.
 
 ---
 

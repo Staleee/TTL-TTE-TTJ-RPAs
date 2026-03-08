@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 REDIS_QUEUE_KEY = 'egypt_visa_queue'
 BLOCK_SECONDS = 30
 CALLBACK_TIMEOUT = 60
+CALLBACK_HEADERS = {'User-Agent': 'EgyptVisaRPA/1.0 (Callback)', 'Accept': 'application/json, */*'}
 
 
 def send_error_callback(callback_url: str, record_id, error_msg: str):
@@ -37,13 +38,11 @@ def send_error_callback(callback_url: str, record_id, error_msg: str):
         }
         if record_id:
             payload['record_id'] = str(record_id).strip()
-        r = requests.post(
-            callback_url,
-            json=payload,
-            headers={'Content-Type': 'application/json'},
-            timeout=CALLBACK_TIMEOUT,
-        )
+        headers = {**CALLBACK_HEADERS, 'Content-Type': 'application/json'}
+        r = requests.post(callback_url, json=payload, headers=headers, timeout=CALLBACK_TIMEOUT)
         logger.info("Error callback sent to %s -> %s (record_id=%s)", callback_url, r.status_code, record_id)
+        if r.status_code >= 400:
+            logger.warning("Error callback response body: %s", (r.text[:500] if r.text else "(empty)"))
     except Exception as e:
         logger.error("Failed to send error to callback %s: %s", callback_url, e)
 
@@ -105,21 +104,25 @@ def main():
             application_data = job.get('application_data') or {}
             callback_url = (job.get('callback_url') or '').strip()
             record_id = job.get('record_id')
-            if not callback_url:
-                logger.warning("Job missing callback_url, skipping")
+            # Process if we have record_id (built-in Zoho upload) or callback_url
+            if not record_id and not callback_url:
+                logger.warning("Job missing both record_id and callback_url, skipping")
                 continue
             logger.info("Processing job record_id=%s callback_url=%s", record_id, callback_url)
+            zoho_oauthtoken = job.get('zoho_oauthtoken')
             try:
                 _run_generate_and_callback(
                     application_data,
                     callback_url,
                     record_id=record_id,
                     redis_client=r,
+                    zoho_oauthtoken=zoho_oauthtoken,
                 )
                 logger.info("Job completed for record_id=%s", record_id)
             except Exception as job_err:
                 logger.exception("Job failed for record_id=%s: %s", record_id, job_err)
-                send_error_callback(callback_url, record_id, str(job_err))
+                if callback_url:
+                    send_error_callback(callback_url, record_id, str(job_err))
         except redis.ConnectionError as e:
             logger.warning("Redis connection error, retrying: %s", e)
         except json.JSONDecodeError as e:

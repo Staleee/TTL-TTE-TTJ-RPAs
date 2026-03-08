@@ -29,16 +29,82 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 CALLBACK_TIMEOUT = 60
+# Headers for callback POST - some APIs (e.g. Zoho) return 401 when User-Agent is Python-requests
+CALLBACK_HEADERS = {
+    'User-Agent': 'EgyptVisaRPA/1.0 (Callback)',
+    'Accept': 'application/json, */*',
+}
 REDIS_QUEUE_KEY = 'egypt_visa_queue'
 REDIS_STATUS_PREFIX = 'egypt_visa:status:'
 JOB_STATUS_TTL = 86400  # 24h
+
+# Zoho Creator: direct upload to record (no Receive API). Build upload URL from record_id.
+ZOHO_UPLOAD_URL_BASE = "https://www.zohoapis.com/creator/v2.1/data/louay.sallakho_maids/visa-application-erp/report/Copy_of_Tourist_Visas_Travel_to_Lebanon"
+ZOHO_REFRESH_URL = "https://accounts.zoho.com/oauth/v2/token"
+_zoho_token_lock = threading.Lock()
+_zoho_access_token_cached = None  # refreshed token kept in memory
+
+
+def _get_zoho_access_token():
+    """Return current Zoho access token (env or in-memory after refresh)."""
+    with _zoho_token_lock:
+        return (os.environ.get('ZOHO_ACCESS_TOKEN') or '').strip() or _zoho_access_token_cached
+
+
+def _refresh_zoho_token():
+    """Refresh Zoho access token using ZOHO_REFRESH_TOKEN, CLIENT_ID, CLIENT_SECRET. Returns new token or None."""
+    global _zoho_access_token_cached
+    refresh_token = (os.environ.get('ZOHO_REFRESH_TOKEN') or '').strip()
+    client_id = (os.environ.get('ZOHO_CLIENT_ID') or '').strip()
+    client_secret = (os.environ.get('ZOHO_CLIENT_SECRET') or '').strip()
+    if not refresh_token or not client_id or not client_secret:
+        logger.warning("Zoho refresh skipped: set ZOHO_REFRESH_TOKEN, ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET")
+        return None
+    try:
+        r = requests.post(ZOHO_REFRESH_URL, data={
+            'grant_type': 'refresh_token',
+            'refresh_token': refresh_token,
+            'client_id': client_id,
+            'client_secret': client_secret,
+        }, timeout=30)
+        data = r.json()
+        if 'access_token' in data:
+            with _zoho_token_lock:
+                _zoho_access_token_cached = data['access_token']
+            logger.info("Zoho access token refreshed successfully")
+            return _zoho_access_token_cached
+        logger.error("Zoho refresh failed: %s", data.get('error', data))
+        return None
+    except Exception as e:
+        logger.exception("Zoho token refresh error: %s", e)
+        return None
+
+
+def _zoho_upload_pdf(upload_url: str, filename: str, pdf_data: bytes, record_id: str) -> requests.Response:
+    """POST PDF to Zoho Upload File API. On 401, refresh token and retry once."""
+    token = _get_zoho_access_token()
+    if not token:
+        token = _refresh_zoho_token()
+    if not token:
+        raise Exception("No Zoho access token. Set ZOHO_ACCESS_TOKEN or ZOHO_REFRESH_TOKEN + ZOHO_CLIENT_ID + ZOHO_CLIENT_SECRET")
+    headers = {**CALLBACK_HEADERS, 'Authorization': f'Zoho-oauthtoken {token}'}
+    files = {'file': (filename, pdf_data, 'application/pdf')}
+    r = requests.post(upload_url, files=files, headers=headers, timeout=CALLBACK_TIMEOUT)
+    if r.status_code == 401:
+        logger.warning("[record_id=%s] Zoho returned 401, refreshing token and retrying", record_id)
+        token = _refresh_zoho_token()
+        if token:
+            headers['Authorization'] = f'Zoho-oauthtoken {token}'
+            r = requests.post(upload_url, files=files, headers=headers, timeout=CALLBACK_TIMEOUT)
+    return r
+
 
 # In-memory job status (keyed by record_id) so you can poll when callback was triggered. Lost on restart.
 _job_status = {}
 _job_status_lock = threading.Lock()
 
 # Meta keys we strip from the request body (not part of visa application data)
-META_KEYS = frozenset({'callback_url', 'record_id'})
+META_KEYS = frozenset({'callback_url', 'record_id', 'zoho_oauthtoken'})
 
 
 def _set_job_status(record_id: str, data: dict, redis_client=None):
@@ -52,10 +118,15 @@ def _set_job_status(record_id: str, data: dict, redis_client=None):
             logger.warning(f"Failed to write job status to Redis: {e}")
 
 
-def _run_generate_and_callback(application_data: dict, callback_url: str, record_id: str = None, redis_client=None):
-    """Background: generate PDF then POST to callback_url with PDF + record_id (for Zoho to attach to record)."""
+def _run_generate_and_callback(application_data: dict, callback_url: str, record_id: str = None, redis_client=None, zoho_oauthtoken: str = None):
+    """Background: generate PDF then upload to Zoho or POST to callback_url.
+    - If callback_url is None and record_id is set: use built-in Zoho Upload API (ZOHO_ACCESS_TOKEN / refresh).
+    - If callback_url contains '{record_id}' and token: use Zoho Upload API with that URL template.
+    - Else: POST to callback_url (Receive API) with document + record_id.
+    """
     rid = (record_id and str(record_id).strip()) or None
-    logger.info(f"[record_id={rid}] JOB STARTED - will callback to {callback_url}")
+    use_builtin_zoho = not (callback_url or '').strip() and rid
+    logger.info(f"[record_id={rid}] JOB STARTED - %s", "upload to Zoho (built-in)" if use_builtin_zoho else f"callback to {callback_url}")
     if rid:
         _set_job_status(rid, {'status': 'processing', 'started_at': datetime.now().isoformat(), 'callback_sent': False}, redis_client)
 
@@ -76,17 +147,32 @@ def _run_generate_and_callback(application_data: dict, callback_url: str, record
                 pdf_data = f.read()
             pdf_path.unlink()
             filename = app_obj.get_output_filename()
-            logger.info(f"[record_id={rid}] PDF ready ({len(pdf_data)} bytes), triggering callback to {callback_url}...")
-            # POST PDF to Zoho's receive API: document + record_id so they can upload to that record
-            files = {'document': (filename, pdf_data, 'application/pdf')}
-            data = {
-                'status': 'success',
-                'applicant_name': f"{app_obj.first_name} {app_obj.family_name}",
-            }
-            if rid:
-                data['record_id'] = rid
-            r = requests.post(callback_url, files=files, data=data, timeout=CALLBACK_TIMEOUT)
-            logger.info(f"[record_id={rid}] Callback TRIGGERED -> {callback_url} returned status {r.status_code}")
+            logger.info(f"[record_id={rid}] PDF ready ({len(pdf_data)} bytes)")
+
+            if use_builtin_zoho:
+                # Direct Zoho Upload API: we build URL and use stored token (refresh on 401)
+                upload_url = f"{ZOHO_UPLOAD_URL_BASE}/{rid}/Visa_Application/upload"
+                logger.info(f"[record_id={rid}] Uploading to Zoho: %s", upload_url)
+                r = _zoho_upload_pdf(upload_url, filename, pdf_data, rid)
+            else:
+                token = (zoho_oauthtoken or os.environ.get('ZOHO_OAUTH_TOKEN') or '').strip()
+                use_zoho_template = '{record_id}' in callback_url and bool(token) and rid
+                if use_zoho_template:
+                    upload_url = callback_url.replace('{record_id}', rid)
+                    headers = {**CALLBACK_HEADERS, 'Authorization': f'Zoho-oauthtoken {token}'}
+                    files = {'file': (filename, pdf_data, 'application/pdf')}
+                    r = requests.post(upload_url, files=files, headers=headers, timeout=CALLBACK_TIMEOUT)
+                else:
+                    files = {'document': (filename, pdf_data, 'application/pdf')}
+                    data = {'status': 'success', 'applicant_name': f"{app_obj.first_name} {app_obj.family_name}"}
+                    if rid:
+                        data['record_id'] = rid
+                    r = requests.post(callback_url, files=files, data=data, headers=CALLBACK_HEADERS, timeout=CALLBACK_TIMEOUT)
+
+            target = (upload_url if use_builtin_zoho else (upload_url if use_zoho_template else callback_url))
+            logger.info(f"[record_id={rid}] Upload/callback TRIGGERED -> %s returned status {r.status_code}", target)
+            if r.status_code >= 400:
+                logger.warning(f"[record_id={rid}] Response body: %s", r.text[:500] if r.text else "(empty)")
             if rid:
                 _set_job_status(rid, {
                     'status': 'done',
@@ -117,13 +203,11 @@ def _run_generate_and_callback(application_data: dict, callback_url: str, record
             if rid:
                 payload['record_id'] = rid
             logger.info(f"[record_id={rid}] Sending error to callback URL...")
-            r = requests.post(
-                callback_url,
-                json=payload,
-                headers={'Content-Type': 'application/json'},
-                timeout=CALLBACK_TIMEOUT
-            )
+            headers = {**CALLBACK_HEADERS, 'Content-Type': 'application/json'}
+            r = requests.post(callback_url, json=payload, headers=headers, timeout=CALLBACK_TIMEOUT)
             logger.info(f"[record_id={rid}] Error callback TRIGGERED -> {callback_url} returned status {r.status_code}")
+            if r.status_code >= 400:
+                logger.warning(f"[record_id={rid}] Error callback response body: %s", r.text[:500] if r.text else "(empty)")
             if rid:
                 with _job_status_lock:
                     _job_status[rid]['callback_sent'] = True
@@ -234,18 +318,22 @@ def generate_visa_pdf():
                 'timestamp': datetime.now().isoformat()
             }), 400
 
-        # Async: return 202 and process via Redis worker (or in-process thread if no Redis)
-        if callback_url:
+        # Async: 202 and process in background (Zoho direct upload when only record_id, or callback_url)
+        has_zoho_creds = bool((os.environ.get('ZOHO_ACCESS_TOKEN') or '').strip() or (os.environ.get('ZOHO_REFRESH_TOKEN') or '').strip())
+        use_async = (record_id and has_zoho_creds) or callback_url
+        if use_async:
+            # When only record_id + Zoho creds: we upload directly to Zoho (no callback_url from client)
+            cb_url = callback_url if callback_url else ''
             redis_url = os.environ.get('REDIS_URL', '').strip()
             if redis_url:
-                # Push job to Redis; worker process will run PDF + callback
                 try:
                     import redis
                     r = redis.from_url(redis_url)
                     job = {
                         'application_data': application_data,
-                        'callback_url': callback_url,
+                        'callback_url': cb_url,
                         'record_id': record_id,
+                        'zoho_oauthtoken': raw.get('zoho_oauthtoken'),
                     }
                     r.lpush(REDIS_QUEUE_KEY, json.dumps(job))
                     if record_id:
@@ -255,7 +343,7 @@ def generate_visa_pdf():
                             'started_at': datetime.now().isoformat(),
                             'callback_sent': False,
                         }), ex=JOB_STATUS_TTL)
-                    logger.info(f"Enqueued job for record_id={record_id}, callback to {callback_url}")
+                    logger.info(f"Enqueued job for record_id={record_id}" + (f", callback to {cb_url}" if cb_url else " (Zoho direct upload)"))
                 except Exception as e:
                     logger.exception(f"Failed to enqueue job: {e}")
                     return jsonify({
@@ -265,24 +353,21 @@ def generate_visa_pdf():
                     }), 503
                 return jsonify({
                     'status': 'accepted',
-                    'message': 'Job queued. Worker will generate PDF and POST to callback_url when done.',
-                    'callback_url': callback_url,
+                    'message': 'Job queued. PDF will be uploaded to Zoho record when done.' if (record_id and has_zoho_creds and not cb_url) else 'Job queued. Worker will generate PDF and POST to callback_url when done.',
                     'record_id': record_id,
                     'timestamp': datetime.now().isoformat()
                 }), 202
-            # No Redis: run in background thread (may not complete on Railway after 202)
-            logger.info(f"Async mode (thread): will callback to {callback_url} with record_id={record_id}")
+            logger.info(f"Async mode (thread): record_id={record_id}" + (f", callback to {cb_url}" if cb_url else " (Zoho direct upload)"))
             thread = threading.Thread(
                 target=_run_generate_and_callback,
-                args=(application_data, callback_url),
-                kwargs={'record_id': record_id},
+                args=(application_data, cb_url),
+                kwargs={'record_id': record_id, 'zoho_oauthtoken': raw.get('zoho_oauthtoken')},
                 daemon=True
             )
             thread.start()
             return jsonify({
                 'status': 'accepted',
-                'message': 'Processing in background. PDF and record_id will be POSTed to callback_url when done.',
-                'callback_url': callback_url,
+                'message': 'PDF will be uploaded to Zoho record when done.' if (record_id and has_zoho_creds and not cb_url) else 'Processing in background. PDF will be POSTed to callback_url when done.',
                 'record_id': record_id,
                 'timestamp': datetime.now().isoformat()
             }), 202
