@@ -51,11 +51,16 @@ def run_health_server(port: int):
     """Serve GET /health so Railway health check succeeds. Runs in a daemon thread."""
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            if self.path == '/health' or self.path == '/health/':
+            if self.path.startswith('/health'):
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
-                self.wfile.write(b'{"status":"healthy","service":"Egypt Visa Worker"}')
+                body = {"status": "healthy", "service": "Egypt Visa Worker"}
+                # So you can verify worker sees Railway vars: GET /health?zoho=1
+                if 'zoho=1' in self.path or 'zoho=1' in (self.path.split('?')[-1] if '?' in self.path else ''):
+                    body["zoho_access_token_set"] = bool((os.environ.get('ZOHO_ACCESS_TOKEN') or os.environ.get('ZOHO_OAUTH_TOKEN') or '').strip())
+                    body["zoho_refresh_token_set"] = bool((os.environ.get('ZOHO_REFRESH_TOKEN') or '').strip())
+                self.wfile.write(json.dumps(body).encode())
             else:
                 self.send_response(404)
                 self.end_headers()

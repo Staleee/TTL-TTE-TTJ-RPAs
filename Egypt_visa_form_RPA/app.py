@@ -46,9 +46,15 @@ _zoho_access_token_cached = None  # refreshed token kept in memory
 
 
 def _get_zoho_access_token():
-    """Return current Zoho access token (env or in-memory after refresh)."""
+    """Return current Zoho access token (env or in-memory after refresh).
+    Reads ZOHO_ACCESS_TOKEN (or ZOHO_OAUTH_TOKEN as fallback for compatibility).
+    """
     with _zoho_token_lock:
-        return (os.environ.get('ZOHO_ACCESS_TOKEN') or '').strip() or _zoho_access_token_cached
+        return (
+            (os.environ.get('ZOHO_ACCESS_TOKEN') or '').strip()
+            or (os.environ.get('ZOHO_OAUTH_TOKEN') or '').strip()
+            or _zoho_access_token_cached
+        )
 
 
 def _refresh_zoho_token():
@@ -320,7 +326,10 @@ def generate_visa_pdf():
             }), 400
 
         # Async: 202 and process in background (Zoho direct upload when only record_id, or callback_url)
-        has_zoho_creds = bool((os.environ.get('ZOHO_ACCESS_TOKEN') or '').strip() or (os.environ.get('ZOHO_REFRESH_TOKEN') or '').strip())
+        has_zoho_creds = bool(
+            (os.environ.get('ZOHO_ACCESS_TOKEN') or os.environ.get('ZOHO_OAUTH_TOKEN') or '').strip()
+            or (os.environ.get('ZOHO_REFRESH_TOKEN') or '').strip()
+        )
         use_async = (record_id and has_zoho_creds) or callback_url
         if use_async:
             # When only record_id + Zoho creds: we upload directly to Zoho (no callback_url from client)

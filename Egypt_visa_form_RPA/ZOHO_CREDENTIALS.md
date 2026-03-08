@@ -4,7 +4,7 @@ The RPA uploads the generated PDF to Zoho Creator using the **Upload File API v2
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| **ZOHO_ACCESS_TOKEN** | Yes (or use refresh) | OAuth access token (scope `ZohoCreator.report.CREATE`). |
+| **ZOHO_ACCESS_TOKEN** or **ZOHO_OAUTH_TOKEN** | Yes (or use refresh) | OAuth access token (scope `ZohoCreator.report.CREATE`). Either name works. |
 | **ZOHO_REFRESH_TOKEN** | Yes (for auto-refresh) | OAuth refresh token. |
 | **ZOHO_CLIENT_ID** | Yes (for auto-refresh) | From Zoho API Console (Self Client). |
 | **ZOHO_CLIENT_SECRET** | Yes (for auto-refresh) | From Zoho API Console (Self Client). |
