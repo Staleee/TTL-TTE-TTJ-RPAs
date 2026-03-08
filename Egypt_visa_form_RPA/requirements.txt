@@ -8,6 +8,7 @@ img2pdf==0.5.1
 flask==3.0.0
 gunicorn==21.2.0
 requests>=2.31.0
+redis>=5.0.0
 
 # Optional dependencies for QR code verification
 # Note: pyzbar requires system library 'zbar'

@@ -9,6 +9,7 @@ from pathlib import Path
 import json
 import logging
 import io
+import os
 import traceback
 import threading
 from datetime import datetime
@@ -28,6 +29,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 CALLBACK_TIMEOUT = 60
+REDIS_QUEUE_KEY = 'egypt_visa_queue'
+REDIS_STATUS_PREFIX = 'egypt_visa:status:'
+JOB_STATUS_TTL = 86400  # 24h
 
 # In-memory job status (keyed by record_id) so you can poll when callback was triggered. Lost on restart.
 _job_status = {}
@@ -37,13 +41,23 @@ _job_status_lock = threading.Lock()
 META_KEYS = frozenset({'callback_url', 'record_id'})
 
 
-def _run_generate_and_callback(application_data: dict, callback_url: str, record_id: str = None):
+def _set_job_status(record_id: str, data: dict, redis_client=None):
+    """Update in-memory job status and optionally Redis (for worker process)."""
+    with _job_status_lock:
+        _job_status[record_id] = data
+    if redis_client and record_id:
+        try:
+            redis_client.set(REDIS_STATUS_PREFIX + record_id, json.dumps(data), ex=JOB_STATUS_TTL)
+        except Exception as e:
+            logger.warning(f"Failed to write job status to Redis: {e}")
+
+
+def _run_generate_and_callback(application_data: dict, callback_url: str, record_id: str = None, redis_client=None):
     """Background: generate PDF then POST to callback_url with PDF + record_id (for Zoho to attach to record)."""
     rid = (record_id and str(record_id).strip()) or None
-    logger.info(f"[record_id={rid}] BACKGROUND THREAD STARTED - will callback to {callback_url}")
+    logger.info(f"[record_id={rid}] JOB STARTED - will callback to {callback_url}")
     if rid:
-        with _job_status_lock:
-            _job_status[rid] = {'status': 'processing', 'started_at': datetime.now().isoformat(), 'callback_sent': False}
+        _set_job_status(rid, {'status': 'processing', 'started_at': datetime.now().isoformat(), 'callback_sent': False}, redis_client)
 
     try:
         logger.info(f"[record_id={rid}] Starting PDF generation...")
@@ -74,13 +88,12 @@ def _run_generate_and_callback(application_data: dict, callback_url: str, record
             r = requests.post(callback_url, files=files, data=data, timeout=CALLBACK_TIMEOUT)
             logger.info(f"[record_id={rid}] Callback TRIGGERED -> {callback_url} returned status {r.status_code}")
             if rid:
-                with _job_status_lock:
-                    _job_status[rid] = {
-                        'status': 'done',
-                        'callback_sent': True,
-                        'callback_status_code': r.status_code,
-                        'finished_at': datetime.now().isoformat(),
-                    }
+                _set_job_status(rid, {
+                    'status': 'done',
+                    'callback_sent': True,
+                    'callback_status_code': r.status_code,
+                    'finished_at': datetime.now().isoformat(),
+                }, redis_client)
         finally:
             try:
                 automation.quit()
@@ -89,13 +102,12 @@ def _run_generate_and_callback(application_data: dict, callback_url: str, record
     except Exception as e:
         logger.exception(f"[record_id={rid}] PDF generation failed: {e}")
         if rid:
-            with _job_status_lock:
-                _job_status[rid] = {
-                    'status': 'failed',
-                    'error': str(e),
-                    'finished_at': datetime.now().isoformat(),
-                    'callback_sent': False,
-                }
+            _set_job_status(rid, {
+                'status': 'failed',
+                'error': str(e),
+                'finished_at': datetime.now().isoformat(),
+                'callback_sent': False,
+            }, redis_client)
         try:
             payload = {
                 'status': 'error',
@@ -116,12 +128,14 @@ def _run_generate_and_callback(application_data: dict, callback_url: str, record
                 with _job_status_lock:
                     _job_status[rid]['callback_sent'] = True
                     _job_status[rid]['callback_status_code'] = r.status_code
+                _set_job_status(rid, _job_status[rid], redis_client)
         except Exception as cb_err:
             logger.error(f"[record_id={rid}] Failed to send error to callback: {cb_err}")
             if rid:
                 with _job_status_lock:
                     _job_status[rid]['callback_sent'] = False
                     _job_status[rid]['callback_error'] = str(cb_err)
+                _set_job_status(rid, _job_status[rid], redis_client)
 
 
 @app.route('/health', methods=['GET'])
@@ -134,15 +148,39 @@ def health_check():
     }), 200
 
 
+def _get_redis():
+    """Return Redis client if REDIS_URL is set, else None. Cached per request to avoid reconnecting every time."""
+    url = os.environ.get('REDIS_URL', '').strip()
+    if not url:
+        return None
+    try:
+        import redis
+        return redis.from_url(url)
+    except Exception as e:
+        logger.warning(f"Redis not available: {e}")
+        return None
+
+
 @app.route('/job-status', methods=['GET'])
 def job_status():
     """
     Poll this to see when the callback was triggered for a given record_id.
     Only works when you sent record_id in the trigger request.
+    When Redis is used, status is read from Redis (worker updates it).
     """
     record_id = (request.args.get('record_id') or '').strip()
     if not record_id:
         return jsonify({'error': 'Missing query param: record_id'}), 400
+    # If Redis is configured, worker writes status there; web app reads it
+    r = _get_redis()
+    if r:
+        try:
+            raw = r.get(REDIS_STATUS_PREFIX + record_id)
+            if raw:
+                info = json.loads(raw)
+                return jsonify({'record_id': record_id, **info}), 200
+        except Exception as e:
+            logger.warning(f"Redis get failed: {e}")
     with _job_status_lock:
         info = _job_status.get(record_id)
     if info is None:
@@ -196,9 +234,44 @@ def generate_visa_pdf():
                 'timestamp': datetime.now().isoformat()
             }), 400
 
-        # Async: return 202 and process in background, then POST PDF + record_id to callback_url
+        # Async: return 202 and process via Redis worker (or in-process thread if no Redis)
         if callback_url:
-            logger.info(f"Async mode: will callback to {callback_url} with record_id={record_id}")
+            redis_url = os.environ.get('REDIS_URL', '').strip()
+            if redis_url:
+                # Push job to Redis; worker process will run PDF + callback
+                try:
+                    import redis
+                    r = redis.from_url(redis_url)
+                    job = {
+                        'application_data': application_data,
+                        'callback_url': callback_url,
+                        'record_id': record_id,
+                    }
+                    r.lpush(REDIS_QUEUE_KEY, json.dumps(job))
+                    if record_id:
+                        rid = str(record_id).strip()
+                        r.set(REDIS_STATUS_PREFIX + rid, json.dumps({
+                            'status': 'queued',
+                            'started_at': datetime.now().isoformat(),
+                            'callback_sent': False,
+                        }), ex=JOB_STATUS_TTL)
+                    logger.info(f"Enqueued job for record_id={record_id}, callback to {callback_url}")
+                except Exception as e:
+                    logger.exception(f"Failed to enqueue job: {e}")
+                    return jsonify({
+                        'error': 'Queue unavailable',
+                        'details': str(e),
+                        'timestamp': datetime.now().isoformat()
+                    }), 503
+                return jsonify({
+                    'status': 'accepted',
+                    'message': 'Job queued. Worker will generate PDF and POST to callback_url when done.',
+                    'callback_url': callback_url,
+                    'record_id': record_id,
+                    'timestamp': datetime.now().isoformat()
+                }), 202
+            # No Redis: run in background thread (may not complete on Railway after 202)
+            logger.info(f"Async mode (thread): will callback to {callback_url} with record_id={record_id}")
             thread = threading.Thread(
                 target=_run_generate_and_callback,
                 args=(application_data, callback_url),
