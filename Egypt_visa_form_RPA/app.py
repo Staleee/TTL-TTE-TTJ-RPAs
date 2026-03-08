@@ -194,32 +194,33 @@ def _run_generate_and_callback(application_data: dict, callback_url: str, record
                 'finished_at': datetime.now().isoformat(),
                 'callback_sent': False,
             }, redis_client)
-        try:
-            payload = {
-                'status': 'error',
-                'error': str(e),
-                'timestamp': datetime.now().isoformat(),
-            }
-            if rid:
-                payload['record_id'] = rid
-            logger.info(f"[record_id={rid}] Sending error to callback URL...")
-            headers = {**CALLBACK_HEADERS, 'Content-Type': 'application/json'}
-            r = requests.post(callback_url, json=payload, headers=headers, timeout=CALLBACK_TIMEOUT)
-            logger.info(f"[record_id={rid}] Error callback TRIGGERED -> {callback_url} returned status {r.status_code}")
-            if r.status_code >= 400:
-                logger.warning(f"[record_id={rid}] Error callback response body: %s", r.text[:500] if r.text else "(empty)")
-            if rid:
-                with _job_status_lock:
-                    _job_status[rid]['callback_sent'] = True
-                    _job_status[rid]['callback_status_code'] = r.status_code
-                _set_job_status(rid, _job_status[rid], redis_client)
-        except Exception as cb_err:
-            logger.error(f"[record_id={rid}] Failed to send error to callback: {cb_err}")
-            if rid:
-                with _job_status_lock:
-                    _job_status[rid]['callback_sent'] = False
-                    _job_status[rid]['callback_error'] = str(cb_err)
-                _set_job_status(rid, _job_status[rid], redis_client)
+        if (callback_url or '').strip():
+            try:
+                payload = {
+                    'status': 'error',
+                    'error': str(e),
+                    'timestamp': datetime.now().isoformat(),
+                }
+                if rid:
+                    payload['record_id'] = rid
+                logger.info(f"[record_id={rid}] Sending error to callback URL...")
+                headers = {**CALLBACK_HEADERS, 'Content-Type': 'application/json'}
+                r = requests.post(callback_url, json=payload, headers=headers, timeout=CALLBACK_TIMEOUT)
+                logger.info(f"[record_id={rid}] Error callback TRIGGERED -> {callback_url} returned status {r.status_code}")
+                if r.status_code >= 400:
+                    logger.warning(f"[record_id={rid}] Error callback response body: %s", r.text[:500] if r.text else "(empty)")
+                if rid:
+                    with _job_status_lock:
+                        _job_status[rid]['callback_sent'] = True
+                        _job_status[rid]['callback_status_code'] = r.status_code
+                    _set_job_status(rid, _job_status[rid], redis_client)
+            except Exception as cb_err:
+                logger.error(f"[record_id={rid}] Failed to send error to callback: {cb_err}")
+                if rid:
+                    with _job_status_lock:
+                        _job_status[rid]['callback_sent'] = False
+                        _job_status[rid]['callback_error'] = str(cb_err)
+                    _set_job_status(rid, _job_status[rid], redis_client)
 
 
 @app.route('/health', methods=['GET'])

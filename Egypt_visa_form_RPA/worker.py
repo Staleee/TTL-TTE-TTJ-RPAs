@@ -79,6 +79,11 @@ def main():
 
     from app import _run_generate_and_callback
 
+    # Log whether Zoho env vars are present (so you can confirm worker has them after redeploy)
+    has_access = bool((os.environ.get('ZOHO_ACCESS_TOKEN') or '').strip())
+    has_refresh = bool((os.environ.get('ZOHO_REFRESH_TOKEN') or '').strip())
+    logger.info("ZOHO_ACCESS_TOKEN set: %s | ZOHO_REFRESH_TOKEN set: %s", has_access, has_refresh)
+
     r = redis.from_url(redis_url)
     # Log which Redis we're using (host only, no password) so you can confirm same as web service
     try:
