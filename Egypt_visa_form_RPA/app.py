@@ -39,22 +39,27 @@ REDIS_STATUS_PREFIX = 'egypt_visa:status:'
 JOB_STATUS_TTL = 86400  # 24h
 
 # Zoho Creator: direct upload to record (no Receive API). Build upload URL from record_id.
-ZOHO_UPLOAD_URL_BASE = "https://www.zohoapis.com/creator/v2.1/data/louay.sallakho_maids/visa-application-erp/report/Copy_of_Tourist_Visas_Travel_to_Lebanon"
+ZOHO_UPLOAD_URL_BASE = "https://www.zohoapis.com/creator/v2.1/data/louay.sallakho_maids/visa-application-erp/report/Tourist_Visa_Report"
 ZOHO_REFRESH_URL = "https://accounts.zoho.com/oauth/v2/token"
 _zoho_token_lock = threading.Lock()
 _zoho_access_token_cached = None  # refreshed token kept in memory
 
 
 def _get_zoho_access_token():
-    """Return current Zoho access token (env or in-memory after refresh).
-    Reads ZOHO_ACCESS_TOKEN (or ZOHO_OAUTH_TOKEN as fallback for compatibility).
+    """Return a valid Zoho access token. Prefer env, then in-memory cache, then refresh from ZOHO_REFRESH_TOKEN.
+    No need to set ZOHO_ACCESS_TOKEN if you have ZOHO_REFRESH_TOKEN + ZOHO_CLIENT_ID + ZOHO_CLIENT_SECRET
+    (we refresh on first use and on 401).
     """
     with _zoho_token_lock:
-        return (
+        token = (
             (os.environ.get('ZOHO_ACCESS_TOKEN') or '').strip()
             or (os.environ.get('ZOHO_OAUTH_TOKEN') or '').strip()
             or _zoho_access_token_cached
         )
+    if token:
+        return token
+    # No token yet: get one via refresh (so you don't have to set access token; refresh handles expiry)
+    return _refresh_zoho_token()
 
 
 def _refresh_zoho_token():
@@ -87,12 +92,13 @@ def _refresh_zoho_token():
 
 
 def _zoho_upload_pdf(upload_url: str, filename: str, pdf_data: bytes, record_id: str) -> requests.Response:
-    """POST PDF to Zoho Upload File API. On 401, refresh token and retry once."""
+    """POST PDF to Zoho Upload File API. Token from env/cache or refreshed; on 401, refresh and retry once."""
     token = _get_zoho_access_token()
     if not token:
-        token = _refresh_zoho_token()
-    if not token:
-        raise Exception("No Zoho access token. Set ZOHO_ACCESS_TOKEN or ZOHO_REFRESH_TOKEN + ZOHO_CLIENT_ID + ZOHO_CLIENT_SECRET")
+        raise Exception(
+            "No Zoho token. Set ZOHO_REFRESH_TOKEN + ZOHO_CLIENT_ID + ZOHO_CLIENT_SECRET (we refresh automatically), "
+            "or set ZOHO_ACCESS_TOKEN."
+        )
     headers = {**CALLBACK_HEADERS, 'Authorization': f'Zoho-oauthtoken {token}'}
     files = {'file': (filename, pdf_data, 'application/pdf')}
     r = requests.post(upload_url, files=files, headers=headers, timeout=CALLBACK_TIMEOUT)
@@ -326,9 +332,14 @@ def generate_visa_pdf():
             }), 400
 
         # Async: 202 and process in background (Zoho direct upload when only record_id, or callback_url)
+        # Async Zoho upload when we have token (env) or can get one (refresh + client id/secret)
         has_zoho_creds = bool(
             (os.environ.get('ZOHO_ACCESS_TOKEN') or os.environ.get('ZOHO_OAUTH_TOKEN') or '').strip()
-            or (os.environ.get('ZOHO_REFRESH_TOKEN') or '').strip()
+            or (
+                (os.environ.get('ZOHO_REFRESH_TOKEN') or '').strip()
+                and (os.environ.get('ZOHO_CLIENT_ID') or '').strip()
+                and (os.environ.get('ZOHO_CLIENT_SECRET') or '').strip()
+            )
         )
         use_async = (record_id and has_zoho_creds) or callback_url
         if use_async:

@@ -60,6 +60,11 @@ def run_health_server(port: int):
                 if 'zoho=1' in self.path or 'zoho=1' in (self.path.split('?')[-1] if '?' in self.path else ''):
                     body["zoho_access_token_set"] = bool((os.environ.get('ZOHO_ACCESS_TOKEN') or os.environ.get('ZOHO_OAUTH_TOKEN') or '').strip())
                     body["zoho_refresh_token_set"] = bool((os.environ.get('ZOHO_REFRESH_TOKEN') or '').strip())
+                    body["zoho_can_refresh"] = bool(
+                        (os.environ.get('ZOHO_REFRESH_TOKEN') or '').strip()
+                        and (os.environ.get('ZOHO_CLIENT_ID') or '').strip()
+                        and (os.environ.get('ZOHO_CLIENT_SECRET') or '').strip()
+                    )
                 self.wfile.write(json.dumps(body).encode())
             else:
                 self.send_response(404)

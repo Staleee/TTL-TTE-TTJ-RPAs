@@ -165,10 +165,10 @@ If your Zoho **Receive API** returns `UPLOAD_RULE_NOT_CONFIGURED` (code 2945), u
 https://www.zohoapis.com/creator/v2.1/data/<account_owner_name>/<app_link_name>/report/<report_link_name>/{record_id}/<field_link_name>/upload
 ```
 
-Example (replace account, app, report, and field link names with yours):
+Example (current app):
 
 ```
-https://www.zohoapis.com/creator/v2.1/data/louay.sallakho_maids/YourApp/report/Copy_of_Tourist_Visas_Travel_to_Lebanon/{record_id}/Visa_Application/upload
+https://www.zohoapis.com/creator/v2.1/data/louay.sallakho_maids/visa-application-erp/report/Tourist_Visa_Report/{record_id}/Visa_Application/upload
 ```
 
 **2. Send that URL as `callback_url` and provide the OAuth token:**
@@ -180,7 +180,7 @@ https://www.zohoapis.com/creator/v2.1/data/louay.sallakho_maids/YourApp/report/C
 
 ```json
 {
-  "callback_url": "https://www.zohoapis.com/creator/v2.1/data/louay.sallakho_maids/YourApp/report/Copy_of_Tourist_Visas_Travel_to_Lebanon/{record_id}/Visa_Application/upload",
+  "callback_url": "https://www.zohoapis.com/creator/v2.1/data/louay.sallakho_maids/visa-application-erp/report/Tourist_Visa_Report/{record_id}/Visa_Application/upload",
   "record_id": "4525902000012879003",
   "zoho_oauthtoken": "1000.xxxxxxxx.xxxxxxxx",
   "personal_info": { "first_name": "Sarah", ... },
