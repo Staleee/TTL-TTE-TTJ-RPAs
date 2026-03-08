@@ -8,7 +8,7 @@ Use this for **POST /generate** or **POST /webhook**.
 
 ## Hardcoded (you don’t send these)
 
-- **Job title (Title/Position):** always **Domestic Worker**
+- **Job title (Title/Position):** **Domestic Worker** – already in the PDF template; we don’t fill it.
 - **Purpose of trip:** always **Tourism**
 
 ---
@@ -17,7 +17,7 @@ Use this for **POST /generate** or **POST /webhook**.
 
 ```json
 {
-  "accompany_name": "John Smith",
+  "agent_name": "John Smith",
   "personal_info": {
     "first_name": "SAHAR",
     "middle_name": "MICHAEL",
@@ -70,7 +70,7 @@ Use this for **POST /generate** or **POST /webhook**.
 | | mobile | No | `"+971 50 123 4567"` |
 | | present_nationality | No | `"BRITISH"` |
 | | nationality_of_origin | No | `"BRITISH"` |
-| **accompany_name** | (top-level) | No | e.g. `"John Smith"` (translated to Arabic for “accompanied by”) |
+| **agent_name** | (top-level) | No | Agent name shown in bottom right: Arabic “accompaniment of family” / `agent_name` |
 | **passport_info** | passport_number | No | `"AB1234567"` |
 | | issuing_country | No | `"UNITED KINGDOM"` |
 | | expiry_date | No | `"15/03/2030"` (DD/MM/YYYY) |
@@ -85,7 +85,7 @@ Use this for **POST /generate** or **POST /webhook**.
 | | lebanon_address | No | Address of stay in Lebanon |
 | **visa_info** | type | No | `"single_entry"`, `"two_entry"`, or `"multiple_entry"` |
 
-**Job title** and **Purpose of trip** are not in the body; they are fixed as **Domestic Worker** and **Tourism**.
+**Job title** is in the PDF template (Domestic Worker); **Purpose of trip** is fixed as **Tourism**. Send **agent_name** in the body to show it in the bottom right (Arabic “accompaniment of family” / agent name).
 
 ---
 

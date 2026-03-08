@@ -218,8 +218,8 @@ TEXT_FIELD_MAPPINGS = {
     "accommodation_info.lebanon_address": "lebanon_address",
 }
 
-# Arabic text prefix for accompaniment
-ARABIC_ACCOMPANIED_BY_PREFIX = "ﺑﻤﺮاﻓﻘﺔ  "
+# Bottom right: Arabic "accompaniment of family" then " / " then agent_name (from request body)
+ARABIC_ACCOMPANIMENT_OF_FAMILY = "ﺑﻤﺮاﻓﻘﺔ اﻟﻌﺎﺋﻠﺔ"
 
 # Visa type pricing labels
 VISA_TYPE_LABELS = {

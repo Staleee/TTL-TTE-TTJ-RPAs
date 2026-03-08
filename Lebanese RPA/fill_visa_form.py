@@ -48,7 +48,7 @@ from field_config import (
     FONT_SIZE,
     CHECKBOX_CHAR,
     CHECKBOX_FONT_SIZE,
-    ARABIC_ACCOMPANIED_BY_PREFIX,
+    ARABIC_ACCOMPANIMENT_OF_FAMILY,
     VISA_TYPE_LABELS,
     BOTTOM_LABEL_FONT_SIZE,
 )
@@ -258,10 +258,7 @@ def insert_arabic_text(page, x: float, y: float, text: str, fontsize: int = FONT
 
 def fill_text_fields(page, data: dict):
     """Fill all text fields based on data values."""
-    # Job title (Title/Position): hardcoded to Domestic Worker
-    if "job_title" in FIELD_COORDINATES:
-        x, y = FIELD_COORDINATES["job_title"]
-        insert_text(page, x, y, "Domestic Worker")
+    # Job title (Title/Position): not filled here – PDF template already has it
 
     for json_path, coord_key in TEXT_FIELD_MAPPINGS.items():
         value = get_nested_value(data, json_path)
@@ -289,13 +286,12 @@ def fill_text_fields(page, data: dict):
             x, y = FIELD_COORDINATES["departure_date"]
             insert_text(page, x, y, str(arrival_to_dubai))
     
-    # Auto-translate accompany_name to Arabic for the accompanied_by field
-    accompany_name = get_nested_value(data, "accompany_name")
-    if accompany_name and "accompanied_by_arabic" in FIELD_COORDINATES:
-        translated_name = translate_to_arabic(accompany_name)
-        arabic_text = ARABIC_ACCOMPANIED_BY_PREFIX + translated_name
+    # Bottom right: Arabic "accompaniment of family" / agent_name (from request body)
+    agent_name = (get_nested_value(data, "agent_name") or "").strip()
+    if "accompanied_by_arabic" in FIELD_COORDINATES:
+        text_to_show = ARABIC_ACCOMPANIMENT_OF_FAMILY + (" / " + agent_name if agent_name else "")
         x, y = FIELD_COORDINATES["accompanied_by_arabic"]
-        insert_arabic_text(page, x, y, arabic_text, fontsize=BOTTOM_LABEL_FONT_SIZE)
+        insert_arabic_text(page, x, y, text_to_show, fontsize=BOTTOM_LABEL_FONT_SIZE)
     
     # Add visa type pricing label on the left side
     visa_type = get_nested_value(data, "visa_info.type")
