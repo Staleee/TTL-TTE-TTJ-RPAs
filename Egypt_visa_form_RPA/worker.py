@@ -2,12 +2,16 @@
 Worker process for Egypt Visa RPA: consumes jobs from Redis and runs PDF generation + callback.
 Run as a separate process on Railway (same repo, start command: python worker.py).
 Requires REDIS_URL. Add Redis to your Railway project and set REDIS_URL (often auto-set by Redis plugin).
+
+Exposes GET /health so Railway's health check passes (same railway.toml as web service).
 """
 
 import json
 import logging
 import os
 import sys
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,6 +21,24 @@ logger = logging.getLogger(__name__)
 
 REDIS_QUEUE_KEY = 'egypt_visa_queue'
 BLOCK_SECONDS = 30
+
+
+def run_health_server(port: int):
+    """Serve GET /health so Railway health check succeeds. Runs in a daemon thread."""
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == '/health' or self.path == '/health/':
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"status":"healthy","service":"Egypt Visa Worker"}')
+            else:
+                self.send_response(404)
+                self.end_headers()
+        def log_message(self, format, *args):
+            pass  # quiet
+    server = HTTPServer(('0.0.0.0', port), Handler)
+    server.serve_forever()
 
 
 def main():
@@ -34,7 +56,11 @@ def main():
     from app import _run_generate_and_callback
 
     r = redis.from_url(redis_url)
-    logger.info("Worker started. Waiting for jobs on queue %s (block=%ss)", REDIS_QUEUE_KEY, BLOCK_SECONDS)
+    # Start health server so Railway health check (GET /health) passes
+    port = int(os.environ.get('PORT', '8080'))
+    health_thread = threading.Thread(target=run_health_server, args=(port,), daemon=True)
+    health_thread.start()
+    logger.info("Worker started. Waiting for jobs on queue %s (block=%ss). Health check on port %s", REDIS_QUEUE_KEY, BLOCK_SECONDS, port)
 
     while True:
         try:
