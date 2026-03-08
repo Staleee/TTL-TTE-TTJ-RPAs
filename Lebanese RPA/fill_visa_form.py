@@ -137,8 +137,7 @@ def redact_existing_dates(page):
 def fill_checkboxes(page, data: dict):
     """Fill all checkbox fields based on data values."""
     
-    # NOTE: Fields 12 (Sex), 17 (Marital Status), and 21 (Purpose of Trip)
-    # are intentionally left empty per form requirements
+    # NOTE: Purpose of Trip is already in the PDF template (we don’t fill it)
     
     # Visa Info
     visa = data.get("visa_info", {})
@@ -164,10 +163,7 @@ def fill_checkboxes(page, data: dict):
             x, y = FIELD_COORDINATES[checkbox_key]
             insert_checkbox(page, x, y)
 
-    # Purpose of Trip: hardcoded to Tourism
-    if "checkbox_tourism" in FIELD_COORDINATES:
-        x, y = FIELD_COORDINATES["checkbox_tourism"]
-        insert_checkbox(page, x, y)
+    # Purpose of Trip: not filled here – PDF template already has it
 
 
 def translate_to_arabic(text: str) -> str:
@@ -286,10 +282,14 @@ def fill_text_fields(page, data: dict):
             x, y = FIELD_COORDINATES["departure_date"]
             insert_text(page, x, y, str(arrival_to_dubai))
     
-    # Bottom right: Arabic "accompaniment of family" / agent_name (from request body)
+    # Bottom right: Arabic "accompaniment of family" / agent_name (agent_name translated to Arabic when possible)
     agent_name = (get_nested_value(data, "agent_name") or "").strip()
     if "accompanied_by_arabic" in FIELD_COORDINATES:
-        text_to_show = ARABIC_ACCOMPANIMENT_OF_FAMILY + (" / " + agent_name if agent_name else "")
+        if agent_name and TRANSLATION_SUPPORT:
+            agent_name_arabic = translate_to_arabic(agent_name)
+            text_to_show = ARABIC_ACCOMPANIMENT_OF_FAMILY + " / " + agent_name_arabic
+        else:
+            text_to_show = ARABIC_ACCOMPANIMENT_OF_FAMILY + (" / " + agent_name if agent_name else "")
         x, y = FIELD_COORDINATES["accompanied_by_arabic"]
         insert_arabic_text(page, x, y, text_to_show, fontsize=BOTTOM_LABEL_FONT_SIZE)
     

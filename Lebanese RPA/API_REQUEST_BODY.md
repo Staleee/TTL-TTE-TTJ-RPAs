@@ -6,14 +6,68 @@ Use this for **POST /generate** or **POST /webhook**.
 
 ---
 
-## Hardcoded (you don’t send these)
+## Already in the PDF (we do not fill these)
 
-- **Job title (Title/Position):** **Domestic Worker** – already in the PDF template; we don’t fill it.
-- **Purpose of trip:** always **Tourism**
+- **Job title (Title/Position):** Domestic Worker  
+- **Purpose of trip:** Tourism  
+
+You do **not** send these; they are already in the template.
 
 ---
 
-## Full example (all fields used by the form)
+## All fields we fill (exact list)
+
+Send only what you have. Any field you omit stays empty on the form.
+
+| You send (JSON path) | We fill on the form |
+|----------------------|----------------------|
+| **agent_name** (top-level) | Bottom right: Arabic “accompaniment of family” / agent name |
+| **personal_info.first_name** | First name |
+| **personal_info.middle_name** | Middle name |
+| **personal_info.last_name** | Last name |
+| **personal_info.place_of_birth** | Place of birth |
+| **personal_info.date_of_birth** | Date of birth |
+| **personal_info.mobile** | Mobile # |
+| **personal_info.present_nationality** | Present nationality |
+| **personal_info.nationality_of_origin** | Nationality of origin |
+| **passport_info.passport_number** | Passport number |
+| **passport_info.issuing_country** | Issuing country |
+| **passport_info.expiry_date** | Passport expiration date |
+| **residence_info.uae_address** | Address in UAE |
+| **residence_info.uae_residency_expiry** | UAE residency expiration date |
+| **travel_history.visa_refusal_details** | Visa refusal details (e.g. "No") |
+| **travel_history.lebanon_previous_visits** | Previous visits to Lebanon (e.g. "No") |
+| **travel_history.criminal_record_details** | Criminal record details (e.g. "No") |
+| **trip_info.departure_date_from_dubai** | Trip start date + Expected arrival (same value) |
+| **trip_info.arrival_date_to_dubai** | Trip end date + Expected departure (same value) |
+| **trip_info.other_purpose** | “Other (specify)” text (only if purpose is other) |
+| **accommodation_info.contact_person** | Contact person in Lebanon |
+| **accommodation_info.lebanon_address** | Address of stay in Lebanon |
+| **visa_info.type** | Visa type checkbox (single_entry / two_entry / multiple_entry) + duration (3 or 6 months) + bottom-left pricing label |
+
+**Checkboxes we set from your data:** Visa type (single / two / multiple entry) and visa duration (3 or 6 months). We do **not** set Sex, Marital status, or Purpose of trip (those are either in the PDF or left for you to mark).
+
+---
+
+## Minimal example (only required-style fields)
+
+```json
+{
+  "personal_info": {
+    "first_name": "SAHAR",
+    "last_name": "SMITH"
+  },
+  "visa_info": {
+    "type": "two_entry"
+  }
+}
+```
+
+All other fields are optional; if missing, that part of the form is left empty.
+
+---
+
+## Full example (every field we use)
 
 ```json
 {
@@ -56,43 +110,14 @@ Use this for **POST /generate** or **POST /webhook**.
 }
 ```
 
----
-
-## Field reference
-
-| Section | Field | Required | Example |
-|--------|--------|----------|---------|
-| **personal_info** | first_name | Yes | `"SAHAR"` |
-| | last_name | Yes | `"SMITH"` |
-| | middle_name | No | `"MICHAEL"` |
-| | place_of_birth | No | `"LONDON, UK"` |
-| | date_of_birth | No | `"15/03/1985"` (DD/MM/YYYY) |
-| | mobile | No | `"+971 50 123 4567"` |
-| | present_nationality | No | `"BRITISH"` |
-| | nationality_of_origin | No | `"BRITISH"` |
-| **agent_name** | (top-level) | No | Agent name shown in bottom right: Arabic “accompaniment of family” / `agent_name` |
-| **passport_info** | passport_number | No | `"AB1234567"` |
-| | issuing_country | No | `"UNITED KINGDOM"` |
-| | expiry_date | No | `"15/03/2030"` (DD/MM/YYYY) |
-| **residence_info** | uae_address | No | Full UAE address |
-| | uae_residency_expiry | No | `"31/12/2026"` |
-| **travel_history** | visa_refusal_details | No | e.g. `"No"` |
-| | lebanon_previous_visits | No | e.g. `"No"` |
-| | criminal_record_details | No | e.g. `"No"` |
-| **trip_info** | departure_date_from_dubai | No | `"01/02/2026"` – used as trip start & arrival |
-| | arrival_date_to_dubai | No | `"15/02/2026"` – used as trip end & departure |
-| **accommodation_info** | contact_person | No | Contact in Lebanon |
-| | lebanon_address | No | Address of stay in Lebanon |
-| **visa_info** | type | No | `"single_entry"`, `"two_entry"`, or `"multiple_entry"` |
-
-**Job title** is in the PDF template (Domestic Worker); **Purpose of trip** is fixed as **Tourism**. Send **agent_name** in the body to show it in the bottom right (Arabic “accompaniment of family” / agent name).
+**visa_info.type** allowed values: `"single_entry"`, `"single"`, `"two_entry"`, `"double"`, `"multiple_entry"`, `"multiple"`.
 
 ---
 
 ## Endpoints
 
-- **GET /health** – Health check
-- **POST /generate** – Generate PDF only; response is the PDF file
+- **GET /health** – Health check  
+- **POST /generate** – Generate PDF only; response is the PDF file  
 - **POST /webhook** – Generate PDF and send it to the external API (see `config.py`)
 
 ---
