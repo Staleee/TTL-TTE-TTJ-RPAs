@@ -258,44 +258,43 @@ def insert_arabic_text(page, x: float, y: float, text: str, fontsize: int = FONT
             pass
 
 
-# English fallback when no Arabic font is available – bottom right is NEVER left empty
+# English fallback when no Arabic font – bottom right is NEVER left empty
 BOTTOM_RIGHT_FALLBACK_ENGLISH = "Accompanied by family"
+_ARABIC_FONT_NAME = "NotoArabic"
 
 
-def insert_bottom_right_arabic_phrase(page, x: float, y: float, fontsize: int = BOTTOM_LABEL_FONT_SIZE):
-    """Always insert the hardcoded 'companionship of family'. Uses bundled font in code (or downloads once), then English fallback."""
-    phrase = ARABIC_ACCOMPANIMENT_OF_FAMILY
+def insert_bottom_right_full_line(
+    page, x: float, y: float, companion_name: str, fontsize: int = BOTTOM_LABEL_FONT_SIZE
+):
+    """
+    Insert the whole bottom-right line in ONE go with ONE font so it actually shows (no tofu, companion included).
+    Uses the bundled Noto Arabic font; if missing, uses English 'Accompanied by family' + companion.
+    """
+    phrase_ar = ARABIC_ACCOMPANIMENT_OF_FAMILY
+    if companion_name:
+        line_ar = phrase_ar + " / " + companion_name
+        line_en = BOTTOM_RIGHT_FALLBACK_ENGLISH + " / " + companion_name
+    else:
+        line_ar = phrase_ar
+        line_en = BOTTOM_RIGHT_FALLBACK_ENGLISH
     point = fitz.Point(x, y)
-    # 1) Bundled font in the project (fonts/NotoSansArabic-Regular.ttf) – no install needed. Downloaded once if missing.
     font_path = _ensure_arabic_font()
-    if font_path is not None:
-        for text in [phrase, reshape_arabic_text(phrase)]:
+    if font_path is not None and font_path.exists():
+        try:
+            page.insert_font(fontname=_ARABIC_FONT_NAME, fontfile=str(font_path))
+            # Reshape so Arabic connects properly
+            text = reshape_arabic_text(line_ar)
+            page.insert_text(point, text, fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=(0, 0, 0))
+            return
+        except Exception:
             try:
-                page.insert_text(
-                    point, text, fontsize=fontsize, color=(0, 0, 0),
-                    fontfile=str(font_path), fontname="NotoSansArabic"
-                )
+                page.insert_font(fontname=_ARABIC_FONT_NAME, fontfile=str(font_path))
+                page.insert_text(point, line_ar, fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=(0, 0, 0))
                 return
             except Exception:
-                continue
-    # 2) System fonts (Windows/macOS/Linux) in case bundled wasn't available
-    for text in [phrase, reshape_arabic_text(phrase)]:
-        for font_config in [
-            {"fontfile": "C:/Windows/Fonts/arial.ttf", "fontname": "Arial"},
-            {"fontfile": "C:/Windows/Fonts/tahoma.ttf", "fontname": "Tahoma"},
-            {"fontfile": "/System/Library/Fonts/GeezaPro.ttc", "fontname": "GeezaPro"},
-            {"fontfile": "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf", "fontname": "NotoSansArabic"},
-            {"fontfile": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "fontname": "DejaVuSans"},
-            {"fontname": "figo"},
-        ]:
-            try:
-                page.insert_text(point, text, fontsize=fontsize, color=(0, 0, 0), **font_config)
-                return
-            except Exception:
-                continue
-    # 3) Fallback so the field is never empty
+                pass
     try:
-        page.insert_text(point, BOTTOM_RIGHT_FALLBACK_ENGLISH, fontname="helv", fontsize=fontsize, color=(0, 0, 0))
+        page.insert_text(point, line_en, fontname="helv", fontsize=fontsize, color=(0, 0, 0))
     except Exception:
         pass
 
@@ -330,16 +329,11 @@ def fill_text_fields(page, data: dict):
             x, y = FIELD_COORDINATES["departure_date"]
             insert_text(page, x, y, str(arrival_to_dubai))
     
-    # Bottom right (inside frame): ALWAYS the Arabic phrase "companionship of family", then " / " + companion if provided
+    # Bottom right: one line, one font – Arabic phrase + companion so nothing is tofu and companion always shows
     if "accompanied_by_arabic" in FIELD_COORDINATES:
         x, y = FIELD_COORDINATES["accompanied_by_arabic"]
-        # 1) Hardcoded Arabic phrase – always inserted so it shows
-        insert_bottom_right_arabic_phrase(page, x, y, BOTTOM_LABEL_FONT_SIZE)
-        # 2) Companion name after the phrase (optional – you don't have to send anything for the phrase to show)
         companion_name = (get_nested_value(data, "companion_name") or get_nested_value(data, "accompany_name") or "").strip()
-        if companion_name:
-            x_companion = x + 88
-            insert_arabic_text(page, x_companion, y, " / " + companion_name, fontsize=BOTTOM_LABEL_FONT_SIZE)
+        insert_bottom_right_full_line(page, x, y, companion_name, BOTTOM_LABEL_FONT_SIZE)
     
     # Bottom left: dynamic label from visa type + duration (e.g. "Two Entry 6M AED 465")
     visa = data.get("visa_info", {})
