@@ -16,8 +16,28 @@ Usage (API):
 import argparse
 import json
 import os
+import urllib.request
 from pathlib import Path
-from typing import Tuple
+from typing import Optional, Tuple
+
+# Path to our bundled Arabic font (in the repo) – no system install needed
+_SCRIPT_DIR = Path(__file__).resolve().parent
+BUNDLED_ARABIC_FONT = _SCRIPT_DIR / "fonts" / "NotoSansArabic-Regular.ttf"
+NOTO_ARABIC_URL = "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf"
+
+
+def _ensure_arabic_font() -> Optional[Path]:
+    """Use bundled font if present; else try to download it once. Returns path if we have a usable font file."""
+    if BUNDLED_ARABIC_FONT.exists():
+        return BUNDLED_ARABIC_FONT
+    try:
+        BUNDLED_ARABIC_FONT.parent.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(NOTO_ARABIC_URL, BUNDLED_ARABIC_FONT)
+        if BUNDLED_ARABIC_FONT.exists():
+            return BUNDLED_ARABIC_FONT
+    except Exception:
+        pass
+    return None
 
 try:
     import fitz  # PyMuPDF
@@ -238,16 +258,31 @@ def insert_arabic_text(page, x: float, y: float, text: str, fontsize: int = FONT
             pass
 
 
+# English fallback when no Arabic font is available – bottom right is NEVER left empty
+BOTTOM_RIGHT_FALLBACK_ENGLISH = "Accompanied by family"
+
+
 def insert_bottom_right_arabic_phrase(page, x: float, y: float, fontsize: int = BOTTOM_LABEL_FONT_SIZE):
-    """Always insert the hardcoded Arabic 'companionship of family' so it actually shows. Tries raw then reshaped."""
+    """Always insert the hardcoded 'companionship of family'. Uses bundled font in code (or downloads once), then English fallback."""
     phrase = ARABIC_ACCOMPANIMENT_OF_FAMILY
     point = fitz.Point(x, y)
-    # Try raw phrase first (no reshaper) – often renders better
+    # 1) Bundled font in the project (fonts/NotoSansArabic-Regular.ttf) – no install needed. Downloaded once if missing.
+    font_path = _ensure_arabic_font()
+    if font_path is not None:
+        for text in [phrase, reshape_arabic_text(phrase)]:
+            try:
+                page.insert_text(
+                    point, text, fontsize=fontsize, color=(0, 0, 0),
+                    fontfile=str(font_path), fontname="NotoSansArabic"
+                )
+                return
+            except Exception:
+                continue
+    # 2) System fonts (Windows/macOS/Linux) in case bundled wasn't available
     for text in [phrase, reshape_arabic_text(phrase)]:
         for font_config in [
             {"fontfile": "C:/Windows/Fonts/arial.ttf", "fontname": "Arial"},
             {"fontfile": "C:/Windows/Fonts/tahoma.ttf", "fontname": "Tahoma"},
-            {"fontfile": "C:/Windows/Fonts/arial.ttf", "fontname": "Arial"},  # retry Arial
             {"fontfile": "/System/Library/Fonts/GeezaPro.ttc", "fontname": "GeezaPro"},
             {"fontfile": "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf", "fontname": "NotoSansArabic"},
             {"fontfile": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "fontname": "DejaVuSans"},
@@ -258,8 +293,9 @@ def insert_bottom_right_arabic_phrase(page, x: float, y: float, fontsize: int = 
                 return
             except Exception:
                 continue
+    # 3) Fallback so the field is never empty
     try:
-        page.insert_text(point, phrase, fontname="helv", fontsize=fontsize, color=(0, 0, 0))
+        page.insert_text(point, BOTTOM_RIGHT_FALLBACK_ENGLISH, fontname="helv", fontsize=fontsize, color=(0, 0, 0))
     except Exception:
         pass
 
@@ -299,7 +335,7 @@ def fill_text_fields(page, data: dict):
         x, y = FIELD_COORDINATES["accompanied_by_arabic"]
         # 1) Hardcoded Arabic phrase – always inserted so it shows
         insert_bottom_right_arabic_phrase(page, x, y, BOTTOM_LABEL_FONT_SIZE)
-        # 2) Companion name after the phrase (offset so we stay in frame)
+        # 2) Companion name after the phrase (optional – you don't have to send anything for the phrase to show)
         companion_name = (get_nested_value(data, "companion_name") or get_nested_value(data, "accompany_name") or "").strip()
         if companion_name:
             x_companion = x + 88

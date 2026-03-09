@@ -46,7 +46,7 @@ Send only what you have. Any field you omit stays empty on the form.
 | **visa_info.type** | Visa type: yellow highlight + bottom-left. **Accepted:** `Single`, `Double`, `Multiple` (or Single Entry, Two Entry, Multiple Entry). |
 | **visa_info.duration_of_visit** or **visa_info.duration** | Duration: yellow highlight. **Accepted:** `15 days`, `one month`, `three months`, `six months`. We do **not** default. |
 
-**Bottom right:** We always write the Arabic phrase for “companionship of family”. If you send **companion_name**, we add “ / ” and the name (translated to Arabic when possible).
+**Bottom right:** You do **not** need to send anything to trigger it – we **always** fill it. We write the Arabic phrase “companionship of family” (بمرافقة العائلة) every time; if no Arabic font is available we write “Accompanied by family”. If you send **companion_name** (or **accompany_name**), we add “ / ” and the name as-is.
 
 **Visa type and duration:** We highlight the selected option in **yellow** (no cross/tick). Duration comes from your request only; we do **not** default to 3 months.
 
