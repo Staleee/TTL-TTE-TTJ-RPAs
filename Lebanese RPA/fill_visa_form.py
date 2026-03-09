@@ -110,9 +110,12 @@ def insert_text(page, x: float, y: float, text: str, fontsize: int = FONT_SIZE):
 
 
 def draw_yellow_text_highlight(page, x: float, y: float, width: float, height: float):
-    """Draw yellow highlight over the actual text (not a box next to it)."""
+    """Draw semi-transparent yellow highlight so the text underneath still shows (highlighter effect)."""
     rect = fitz.Rect(x, y, x + width, y + height)
-    page.draw_rect(rect, fill=(1, 1, 0), color=(1, 1, 0))
+    try:
+        page.draw_rect(rect, fill=(1, 1, 0), color=(1, 1, 0), fill_opacity=0.4)
+    except TypeError:
+        page.draw_rect(rect, fill=(1, 1, 0), color=(1, 1, 0))
 
 
 def insert_checkbox(page, x: float, y: float):
@@ -297,13 +300,16 @@ def fill_text_fields(page, data: dict):
             x, y = FIELD_COORDINATES["departure_date"]
             insert_text(page, x, y, str(arrival_to_dubai))
     
-    # Bottom right: always Arabic "companionship of family"; then " / " + companion_name (as-is, no translation)
-    # Accept companion_name or accompany_name (Zoho sends companion_name; some payloads use accompany_name)
-    companion_name = (get_nested_value(data, "companion_name") or get_nested_value(data, "accompany_name") or "").strip()
+    # Bottom right: ALWAYS show Arabic "companionship of family" (hardcoded), then " / " + companion_name if provided
     if "accompanied_by_arabic" in FIELD_COORDINATES:
         x, y = FIELD_COORDINATES["accompanied_by_arabic"]
-        text_to_show = ARABIC_ACCOMPANIMENT_OF_FAMILY + (" / " + companion_name if companion_name else "")
-        insert_arabic_text(page, x, y, text_to_show, fontsize=BOTTOM_LABEL_FONT_SIZE)
+        # 1) Always insert the Arabic phrase first (hardcoded – we always know to put it)
+        insert_arabic_text(page, x, y, ARABIC_ACCOMPANIMENT_OF_FAMILY, fontsize=BOTTOM_LABEL_FONT_SIZE)
+        # 2) Then companion name if present (as-is); approximate offset so it appears after the phrase
+        companion_name = (get_nested_value(data, "companion_name") or get_nested_value(data, "accompany_name") or "").strip()
+        if companion_name:
+            x_companion = x + 95  # width of "بمرافقة العائلة" at ~14pt so " / Name" follows
+            insert_arabic_text(page, x_companion, y, " / " + companion_name, fontsize=BOTTOM_LABEL_FONT_SIZE)
     
     # Bottom left: dynamic label from visa type + duration (e.g. "Two Entry 6M AED 465")
     visa = data.get("visa_info", {})

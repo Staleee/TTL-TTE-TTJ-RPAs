@@ -169,28 +169,34 @@ CHECKBOX_MAPPINGS = {
         "official": "checkbox_official",
         "other": "checkbox_other_purpose"
     },
+    # Visa type: accepted values from Zoho are Single, Double, Multiple (we normalize to entry form)
     "visa_type": {
-        "single_entry": "checkbox_single_entry",
         "single": "checkbox_single_entry",
+        "single_entry": "checkbox_single_entry",
         "single entry": "checkbox_single_entry",
+        "double": "checkbox_two_entry",
         "two_entry": "checkbox_two_entry",
         "two entry": "checkbox_two_entry",
-        "double": "checkbox_two_entry",
         "double_entry": "checkbox_two_entry",
         "double entry": "checkbox_two_entry",
-        "multiple_entry": "checkbox_multiple_entry",
         "multiple": "checkbox_multiple_entry",
+        "multiple_entry": "checkbox_multiple_entry",
         "multiple entry": "checkbox_multiple_entry",
     },
+    # Visa duration: accepted values from Zoho are 15 days, one month, three months, six months
     "visa_duration": {
-        "15_days": "checkbox_15_days",
         "15 days": "checkbox_15_days",
+        "15_days": "checkbox_15_days",
+        "15days": "checkbox_15_days",
+        "one month": "checkbox_one_month",
         "one_month": "checkbox_one_month",
         "1_month": "checkbox_one_month",
         "1 month": "checkbox_one_month",
+        "three months": "checkbox_three_months",
         "three_months": "checkbox_three_months",
         "3_months": "checkbox_three_months",
         "3 months": "checkbox_three_months",
+        "six months": "checkbox_six_months",
         "six_months": "checkbox_six_months",
         "6_months": "checkbox_six_months",
         "6 months": "checkbox_six_months",
@@ -237,8 +243,8 @@ TEXT_FIELD_MAPPINGS = {
     "accommodation_info.lebanon_address": "lebanon_address",
 }
 
-# Bottom right: Arabic "companionship of family" then " / " then companion_name (from request body, used as-is)
-ARABIC_ACCOMPANIMENT_OF_FAMILY = "ﺑﻤﺮاﻓﻘﺔ اﻟﻌﺎﺋﻠﺔ"
+# Bottom right: Arabic "companionship of family" – HARDCODED, always shown. Standard Arabic script so it renders in Arial/Tahoma.
+ARABIC_ACCOMPANIMENT_OF_FAMILY = "\u0628\u0645\u0631\u0627\u0641\u0642\u0629 \u0627\u0644\u0639\u0627\u0626\u0644\u0629"  # بمرافقة العائلة
 
 # Bottom left: dynamic label from visa type + duration -> "Type Duration AED Price"
 # Keys: (normalized_type, normalized_duration). Normalized: single_entry, two_entry, multiple_entry | 15_days, 1_month, 3_months, 6_months
@@ -278,7 +284,7 @@ def normalize_visa_type(raw: str) -> str:
 
 
 def normalize_duration(raw: str) -> str:
-    """Normalize duration to 15_days, 1_month, 3_months, or 6_months."""
+    """Normalize duration to 15_days, 1_month, 3_months, or 6_months. Accepted: 15 days, one month, three months, six months."""
     if not raw or not isinstance(raw, str):
         return ""
     d = raw.strip().lower().replace(" ", "_")
@@ -288,7 +294,7 @@ def normalize_duration(raw: str) -> str:
         return "1_month"
     if d in ("3_months", "three_months", "3months"):
         return "3_months"
-    if d in ("6_months", "six_months", "6months", "six months"):
+    if d in ("6_months", "six_months", "6months"):
         return "6_months"
     return ""
 

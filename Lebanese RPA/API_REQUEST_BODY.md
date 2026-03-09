@@ -43,8 +43,8 @@ Send only what you have. Any field you omit stays empty on the form.
 | **trip_info.other_purpose** | “Other (specify)” text (only if purpose is other) |
 | **accommodation_info.contact_person** | Contact person in Lebanon |
 | **accommodation_info.lebanon_address** | Address of stay in Lebanon |
-| **visa_info.type** | Visa type: yellow highlight on selected option (single_entry / two_entry / multiple_entry) + bottom-left pricing label |
-| **visa_info.duration_of_visit** or **visa_info.duration** | Duration of visit: yellow highlight on selected option (e.g. `"15 days"`, `"1 month"`, `"3 months"`, `"6 months"`). Send this; we do **not** default to 3 months. |
+| **visa_info.type** | Visa type: yellow highlight + bottom-left. **Accepted:** `Single`, `Double`, `Multiple` (or Single Entry, Two Entry, Multiple Entry). |
+| **visa_info.duration_of_visit** or **visa_info.duration** | Duration: yellow highlight. **Accepted:** `15 days`, `one month`, `three months`, `six months`. We do **not** default. |
 
 **Bottom right:** We always write the Arabic phrase for “companionship of family”. If you send **companion_name**, we add “ / ” and the name (translated to Arabic when possible).
 
@@ -114,9 +114,9 @@ All other fields are optional; if missing, that part of the form is left empty.
 }
 ```
 
-**visa_info.type:** We accept e.g. `"Single Entry"`, `"Double Entry"`, `"Multiple Entry"` or `single_entry`, `two_entry`, `multiple_entry`.
+**visa_info.type:** Accepted values: **Single**, **Double**, **Multiple** (what Zoho sends). We also accept "Single Entry", "Double Entry", "Multiple Entry".
 
-**visa_info.duration** or **visa_info.duration_of_visit:** e.g. `"15 days"`, `"1 month"`, `"3 months"`, `"6 months"` (or with underscores). We do not default to 3 months.
+**visa_info.duration** or **visa_info.duration_of_visit:** Accepted values: **15 days**, **one month**, **three months**, **six months**. We do not default.
 
 ---
 
