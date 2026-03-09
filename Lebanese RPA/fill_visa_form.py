@@ -282,14 +282,16 @@ def insert_bottom_right_full_line(
     if font_path is not None and font_path.exists():
         try:
             page.insert_font(fontname=_ARABIC_FONT_NAME, fontfile=str(font_path))
-            # Reshape so Arabic connects properly
-            text = reshape_arabic_text(line_ar)
+            # Reshape ONLY the phrase so it connects; leave companion name raw so it doesn't turn into squares
+            phrase_display = reshape_arabic_text(phrase_ar)
+            text = phrase_display + (" / " + companion_name if companion_name else "")
             page.insert_text(point, text, fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=(0, 0, 0))
             return
         except Exception:
             try:
                 page.insert_font(fontname=_ARABIC_FONT_NAME, fontfile=str(font_path))
-                page.insert_text(point, line_ar, fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=(0, 0, 0))
+                text_raw = phrase_ar + (" / " + companion_name if companion_name else "")
+                page.insert_text(point, text_raw, fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=(0, 0, 0))
                 return
             except Exception:
                 pass
