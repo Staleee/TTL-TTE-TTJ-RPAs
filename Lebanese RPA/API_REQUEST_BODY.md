@@ -21,7 +21,7 @@ Send only what you have. Any field you omit stays empty on the form.
 
 | You send (JSON path) | We fill on the form |
 |----------------------|----------------------|
-| **companion_name** (top-level) | Bottom right: Arabic “companionship of family” is always shown; if you send this, we add “ / ” + companion name (in Arabic when possible) |
+| **companion_name** or **accompany_name** (top-level) | Bottom right: Arabic “companionship of family” is always shown; if you send this, we add “ / ” + name **as-is** (no translation) |
 | **personal_info.first_name** | First name |
 | **personal_info.middle_name** | Middle name |
 | **personal_info.last_name** | Last name |
@@ -114,9 +114,30 @@ All other fields are optional; if missing, that part of the form is left empty.
 }
 ```
 
-**visa_info.type:** `"single_entry"`, `"single"`, `"two_entry"`, `"double"`, `"multiple_entry"`, `"multiple"`.
+**visa_info.type:** We accept e.g. `"Single Entry"`, `"Double Entry"`, `"Multiple Entry"` or `single_entry`, `two_entry`, `multiple_entry`.
 
-**visa_info.duration_of_visit** or **visa_info.duration:** `"15 days"`, `"15_days"`, `"1 month"`, `"one_month"`, `"3 months"`, `"three_months"`, `"6 months"`, `"six_months"`. Send the duration you want; we do not default to 3 months.
+**visa_info.duration** or **visa_info.duration_of_visit:** e.g. `"15 days"`, `"1 month"`, `"3 months"`, `"6 months"` (or with underscores). We do not default to 3 months.
+
+---
+
+## Zoho / Deluge payload mapping
+
+The API expects the same shape as built by your Deluge function. Summary:
+
+| Deluge / Zoho source | Payload key | Notes |
+|----------------------|-------------|--------|
+| `companion_name` (Client or Companion) | **companion_name** | Used as-is on form (Arabic phrase + " / " + name). We also accept **accompany_name** as fallback. |
+| `rec.Maid_Name1` / Middle / Last | **personal_info** .first_name, .middle_name, .last_name | |
+| `rec.Place_of_birth`, `dobStr`, `rec.Maid_Phone_Number1`, nationality | **personal_info** .place_of_birth, .date_of_birth, .mobile, .present_nationality, .nationality_of_origin | |
+| `rec.Passport_Number`, Issuing_Country, `passExpStr` | **passport_info** .passport_number, .issuing_country, .expiry_date | |
+| `rec.Client_Full_Address`, `rvisaExpStr` | **residence_info** .uae_address, .uae_residency_expiry | |
+| Visa refusal, `rec.Travelled_Before`, criminal | **travel_history** .visa_refusal_details, .lebanon_previous_visits, .criminal_record_details | |
+| `arrStr`, `depStr` | **trip_info** .departure_date_from_dubai, .arrival_date_to_dubai | dd/MM/yyyy |
+| `rec.Client_Phone_Number`, `rec.Location_in_Lebanon` | **accommodation_info** .contact_person, .lebanon_address | |
+| `rec.Visa_Type` | **visa_info** .type | e.g. "Single Entry", "Double Entry", "Multiple Entry" |
+| `rec.Duration_of_Visa.toString()` | **visa_info** .duration | e.g. "3 months", "6 months" (we also accept .duration_of_visit) |
+
+**Endpoint used in Deluge:** `POST https://travel-to-lebanon-production.up.railway.app/generate` with `Content-Type: application/json` and body = payload as JSON.
 
 ---
 

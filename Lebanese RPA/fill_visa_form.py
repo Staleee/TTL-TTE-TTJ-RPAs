@@ -49,8 +49,10 @@ from field_config import (
     CHECKBOX_CHAR,
     CHECKBOX_FONT_SIZE,
     ARABIC_ACCOMPANIMENT_OF_FAMILY,
-    VISA_TYPE_LABELS,
     BOTTOM_LABEL_FONT_SIZE,
+    VISA_TYPE_TEXT_RECTS,
+    VISA_DURATION_TEXT_RECTS,
+    get_bottom_left_label,
 )
 
 
@@ -107,9 +109,9 @@ def insert_text(page, x: float, y: float, text: str, fontsize: int = FONT_SIZE):
         )
 
 
-def draw_yellow_highlight(page, x: float, y: float, size: float = 14):
-    """Draw a yellow highlight rectangle (e.g. for visa type / duration selection)."""
-    rect = fitz.Rect(x - 2, y - 2, x + size, y + size)
+def draw_yellow_text_highlight(page, x: float, y: float, width: float, height: float):
+    """Draw yellow highlight over the actual text (not a box next to it)."""
+    rect = fitz.Rect(x, y, x + width, y + height)
     page.draw_rect(rect, fill=(1, 1, 0), color=(1, 1, 0))
 
 
@@ -151,21 +153,27 @@ def fill_checkboxes(page, data: dict):
     # Visa Info – visa type and duration highlighted in yellow (no cross)
     visa = data.get("visa_info", {})
     
-    # Visa Type: yellow highlight on selected type
-    visa_type = (visa.get("type") or "").strip().lower()
+    # Visa Type: yellow highlight on the actual text (Single Entry / Two Entry / Multiple Entry)
+    visa_type_raw = (visa.get("type") or "").strip()
+    visa_type = visa_type_raw.lower().replace(" ", "_")
+    if not visa_type and " " in visa_type_raw:
+        visa_type = visa_type_raw.lower()
     if visa_type in CHECKBOX_MAPPINGS["visa_type"]:
         checkbox_key = CHECKBOX_MAPPINGS["visa_type"][visa_type]
-        if checkbox_key in FIELD_COORDINATES:
-            x, y = FIELD_COORDINATES[checkbox_key]
-            draw_yellow_highlight(page, x, y)
+        if checkbox_key in VISA_TYPE_TEXT_RECTS:
+            x, y, w, h = VISA_TYPE_TEXT_RECTS[checkbox_key]
+            draw_yellow_text_highlight(page, x, y, w, h)
     
-    # Visa Duration: from request (duration_of_visit or duration); no default 3 months
-    duration_raw = (visa.get("duration_of_visit") or visa.get("duration") or "").strip().lower()
-    if duration_raw and duration_raw in CHECKBOX_MAPPINGS["visa_duration"]:
-        checkbox_key = CHECKBOX_MAPPINGS["visa_duration"][duration_raw]
-        if checkbox_key in FIELD_COORDINATES:
-            x, y = FIELD_COORDINATES[checkbox_key]
-            draw_yellow_highlight(page, x, y)
+    # Visa Duration: yellow highlight on the actual text (15 days / 1 month / 3 months / 6 months)
+    duration_raw = (visa.get("duration_of_visit") or visa.get("duration") or "").strip()
+    duration_key = duration_raw.lower().replace(" ", "_") if duration_raw else ""
+    if not duration_key and duration_raw:
+        duration_key = duration_raw.lower()
+    if duration_key and duration_key in CHECKBOX_MAPPINGS["visa_duration"]:
+        checkbox_key = CHECKBOX_MAPPINGS["visa_duration"][duration_key]
+        if checkbox_key in VISA_DURATION_TEXT_RECTS:
+            x, y, w, h = VISA_DURATION_TEXT_RECTS[checkbox_key]
+            draw_yellow_text_highlight(page, x, y, w, h)
 
     # Purpose of Trip: not filled here – PDF template already has it
 
@@ -209,16 +217,19 @@ def insert_arabic_text(page, x: float, y: float, text: str, fontsize: int = FONT
         
         # Try different Arabic font approaches in order of preference
         font_attempts = [
-            # 1. Try macOS fonts (for local development)
+            # 1. Windows
+            {"fontfile": "C:/Windows/Fonts/arial.ttf", "fontname": "Arial"},
+            {"fontfile": "C:/Windows/Fonts/tahoma.ttf", "fontname": "Tahoma"},
+            {"fontfile": "C:/Windows/Fonts/times.ttf", "fontname": "Times"},
+            # 2. macOS
             {"fontfile": "/System/Library/Fonts/GeezaPro.ttc", "fontname": "GeezaPro"},
             {"fontfile": "/System/Library/Fonts/SFArabic.ttf", "fontname": "SFArabic"},
-            # 2. Try common Linux fonts (for Railway/production)
+            # 3. Linux
             {"fontfile": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "fontname": "DejaVuSans"},
-            {"fontfile": "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "fontname": "LiberationSans"},
             {"fontfile": "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf", "fontname": "NotoSansArabic"},
             {"fontfile": "/usr/share/fonts/truetype/freefont/FreeSans.ttf", "fontname": "FreeSans"},
-            # 3. Try PyMuPDF built-in fonts
-            {"fontname": "figo"},  # Built-in font with good Unicode support
+            # 4. PyMuPDF built-in
+            {"fontname": "figo"},
         ]
         
         text_inserted = False
@@ -286,26 +297,22 @@ def fill_text_fields(page, data: dict):
             x, y = FIELD_COORDINATES["departure_date"]
             insert_text(page, x, y, str(arrival_to_dubai))
     
-    # Bottom right: always Arabic "companionship of family"; then " / " + companion_name (from request, translated to Arabic when possible)
-    companion_name = (get_nested_value(data, "companion_name") or "").strip()
+    # Bottom right: always Arabic "companionship of family"; then " / " + companion_name (as-is, no translation)
+    # Accept companion_name or accompany_name (Zoho sends companion_name; some payloads use accompany_name)
+    companion_name = (get_nested_value(data, "companion_name") or get_nested_value(data, "accompany_name") or "").strip()
     if "accompanied_by_arabic" in FIELD_COORDINATES:
         x, y = FIELD_COORDINATES["accompanied_by_arabic"]
-        # Always show the Arabic phrase (companionship of family)
-        if companion_name and TRANSLATION_SUPPORT:
-            companion_arabic = translate_to_arabic(companion_name)
-            text_to_show = ARABIC_ACCOMPANIMENT_OF_FAMILY + " / " + companion_arabic
-        else:
-            text_to_show = ARABIC_ACCOMPANIMENT_OF_FAMILY + (" / " + companion_name if companion_name else "")
+        text_to_show = ARABIC_ACCOMPANIMENT_OF_FAMILY + (" / " + companion_name if companion_name else "")
         insert_arabic_text(page, x, y, text_to_show, fontsize=BOTTOM_LABEL_FONT_SIZE)
     
-    # Add visa type pricing label on the left side
-    visa_type = get_nested_value(data, "visa_info.type")
-    if visa_type and "visa_type_label" in FIELD_COORDINATES:
-        visa_type_lower = visa_type.lower()
-        if visa_type_lower in VISA_TYPE_LABELS:
-            label_text = VISA_TYPE_LABELS[visa_type_lower]
-            x, y = FIELD_COORDINATES["visa_type_label"]
-            insert_text(page, x, y, label_text, fontsize=BOTTOM_LABEL_FONT_SIZE)
+    # Bottom left: dynamic label from visa type + duration (e.g. "Two Entry 6M AED 465")
+    visa = data.get("visa_info", {})
+    visa_type = visa.get("type") or ""
+    duration = visa.get("duration_of_visit") or visa.get("duration") or ""
+    label_text = get_bottom_left_label(visa_type, duration)
+    if label_text and "visa_type_label" in FIELD_COORDINATES:
+        x, y = FIELD_COORDINATES["visa_type_label"]
+        insert_text(page, x, y, label_text, fontsize=BOTTOM_LABEL_FONT_SIZE)
 
 
 def generate_filled_pdf_bytes(data: dict, template_path: str) -> Tuple[bytes, str]:

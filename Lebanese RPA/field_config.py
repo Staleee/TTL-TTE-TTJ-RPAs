@@ -172,10 +172,15 @@ CHECKBOX_MAPPINGS = {
     "visa_type": {
         "single_entry": "checkbox_single_entry",
         "single": "checkbox_single_entry",
+        "single entry": "checkbox_single_entry",
         "two_entry": "checkbox_two_entry",
+        "two entry": "checkbox_two_entry",
         "double": "checkbox_two_entry",
+        "double_entry": "checkbox_two_entry",
+        "double entry": "checkbox_two_entry",
         "multiple_entry": "checkbox_multiple_entry",
-        "multiple": "checkbox_multiple_entry"
+        "multiple": "checkbox_multiple_entry",
+        "multiple entry": "checkbox_multiple_entry",
     },
     "visa_duration": {
         "15_days": "checkbox_15_days",
@@ -188,8 +193,22 @@ CHECKBOX_MAPPINGS = {
         "3 months": "checkbox_three_months",
         "six_months": "checkbox_six_months",
         "6_months": "checkbox_six_months",
-        "6 months": "checkbox_six_months"
+        "6 months": "checkbox_six_months",
     }
+}
+
+# Rectangles that cover the actual printed text for visa type / duration (for yellow highlight)
+# Format: (x, y, width, height) - highlight the text, not the checkbox
+VISA_TYPE_TEXT_RECTS = {
+    "checkbox_single_entry": (78, 564, 98, 16),
+    "checkbox_two_entry": (78, 586, 88, 16),
+    "checkbox_multiple_entry": (78, 607, 112, 16),
+}
+VISA_DURATION_TEXT_RECTS = {
+    "checkbox_15_days": (258, 568, 58, 14),
+    "checkbox_one_month": (338, 568, 72, 14),
+    "checkbox_three_months": (256, 576, 92, 14),
+    "checkbox_six_months": (338, 576, 72, 14),
 }
 
 # Text field mappings from JSON path to coordinate key
@@ -218,16 +237,73 @@ TEXT_FIELD_MAPPINGS = {
     "accommodation_info.lebanon_address": "lebanon_address",
 }
 
-# Bottom right: Arabic "companionship of family" then " / " then companion_name (from request body)
+# Bottom right: Arabic "companionship of family" then " / " then companion_name (from request body, used as-is)
 ARABIC_ACCOMPANIMENT_OF_FAMILY = "ﺑﻤﺮاﻓﻘﺔ اﻟﻌﺎﺋﻠﺔ"
 
-# Visa type pricing labels
-VISA_TYPE_LABELS = {
-    "single_entry": "Single Entry 3M AED 325 ",
-    "single": "Single Entry 3M AED 325 ",
-    "two_entry": "Two Entry 3M AED 465 ",
-    "double": "Two Entry 3M AED 465 ",
-    "multiple_entry": "Multiple Entry 6M AED 645 ",
-    "multiple": "Multiple Entry 6M AED   645 ",
+# Bottom left: dynamic label from visa type + duration -> "Type Duration AED Price"
+# Keys: (normalized_type, normalized_duration). Normalized: single_entry, two_entry, multiple_entry | 15_days, 1_month, 3_months, 6_months
+BOTTOM_LEFT_LABELS = {
+    ("single_entry", "15_days"): "Single Entry 15 days AED 325",
+    ("single_entry", "1_month"): "Single Entry 1M AED 325",
+    ("single_entry", "3_months"): "Single Entry 3M AED 325",
+    ("single_entry", "6_months"): "Single Entry 6M AED 325",
+    ("two_entry", "15_days"): "Two Entry 15 days AED 465",
+    ("two_entry", "1_month"): "Two Entry 1M AED 465",
+    ("two_entry", "3_months"): "Two Entry 3M AED 465",
+    ("two_entry", "6_months"): "Two Entry 6M AED 465",
+    ("multiple_entry", "15_days"): "Multiple Entry 15 days AED 645",
+    ("multiple_entry", "1_month"): "Multiple Entry 1M AED 645",
+    ("multiple_entry", "3_months"): "Multiple Entry 3M AED 645",
+    ("multiple_entry", "6_months"): "Multiple Entry 6M AED 645",
 }
+
+# Display names for type/duration when building fallback label
+TYPE_DISPLAY = {"single_entry": "Single Entry", "two_entry": "Two Entry", "multiple_entry": "Multiple Entry"}
+DURATION_DISPLAY = {"15_days": "15 days", "1_month": "1M", "3_months": "3M", "6_months": "6M"}
+DEFAULT_PRICE = {"single_entry": "325", "two_entry": "465", "multiple_entry": "645"}
+
+
+def normalize_visa_type(raw: str) -> str:
+    """Normalize visa type to single_entry, two_entry, or multiple_entry."""
+    if not raw or not isinstance(raw, str):
+        return ""
+    t = raw.strip().lower().replace(" ", "_")
+    if t in ("single_entry", "single"):
+        return "single_entry"
+    if t in ("two_entry", "double", "double_entry"):
+        return "two_entry"
+    if t in ("multiple_entry", "multiple"):
+        return "multiple_entry"
+    return ""
+
+
+def normalize_duration(raw: str) -> str:
+    """Normalize duration to 15_days, 1_month, 3_months, or 6_months."""
+    if not raw or not isinstance(raw, str):
+        return ""
+    d = raw.strip().lower().replace(" ", "_")
+    if d in ("15_days", "15days"):
+        return "15_days"
+    if d in ("1_month", "one_month", "1month"):
+        return "1_month"
+    if d in ("3_months", "three_months", "3months"):
+        return "3_months"
+    if d in ("6_months", "six_months", "6months", "six months"):
+        return "6_months"
+    return ""
+
+
+def get_bottom_left_label(visa_type: str, duration: str) -> str:
+    """Return dynamic bottom-left label from visa type and duration."""
+    ntype = normalize_visa_type(visa_type)
+    ndur = normalize_duration(duration)
+    if (ntype, ndur) in BOTTOM_LEFT_LABELS:
+        return BOTTOM_LEFT_LABELS[(ntype, ndur)]
+    if ntype and ndur:
+        return f"{TYPE_DISPLAY.get(ntype, ntype)} {DURATION_DISPLAY.get(ndur, ndur)} AED {DEFAULT_PRICE.get(ntype, '')}"
+    if ntype:
+        # Only type: use 3M for single/two, 6M for multiple
+        ndur = "6_months" if ntype == "multiple_entry" else "3_months"
+        return BOTTOM_LEFT_LABELS.get((ntype, ndur), f"{TYPE_DISPLAY.get(ntype, ntype)} AED {DEFAULT_PRICE.get(ntype, '')}")
+    return ""
 
