@@ -21,7 +21,7 @@ Send only what you have. Any field you omit stays empty on the form.
 
 | You send (JSON path) | We fill on the form |
 |----------------------|----------------------|
-| **agent_name** (top-level) | Bottom right: Arabic “accompaniment of family” / agent name |
+| **companion_name** (top-level) | Bottom right: Arabic “companionship of family” is always shown; if you send this, we add “ / ” + companion name (in Arabic when possible) |
 | **personal_info.first_name** | First name |
 | **personal_info.middle_name** | Middle name |
 | **personal_info.last_name** | Last name |
@@ -43,9 +43,12 @@ Send only what you have. Any field you omit stays empty on the form.
 | **trip_info.other_purpose** | “Other (specify)” text (only if purpose is other) |
 | **accommodation_info.contact_person** | Contact person in Lebanon |
 | **accommodation_info.lebanon_address** | Address of stay in Lebanon |
-| **visa_info.type** | Visa type checkbox (single_entry / two_entry / multiple_entry) + duration (3 or 6 months) + bottom-left pricing label |
+| **visa_info.type** | Visa type: yellow highlight on selected option (single_entry / two_entry / multiple_entry) + bottom-left pricing label |
+| **visa_info.duration_of_visit** or **visa_info.duration** | Duration of visit: yellow highlight on selected option (e.g. `"15 days"`, `"1 month"`, `"3 months"`, `"6 months"`). Send this; we do **not** default to 3 months. |
 
-**Checkboxes we set from your data:** Visa type (single / two / multiple entry) and visa duration (3 or 6 months). We do **not** set Sex, Marital status, or Purpose of trip (those are either in the PDF or left for you to mark).
+**Bottom right:** We always write the Arabic phrase for “companionship of family”. If you send **companion_name**, we add “ / ” and the name (translated to Arabic when possible).
+
+**Visa type and duration:** We highlight the selected option in **yellow** (no cross/tick). Duration comes from your request only; we do **not** default to 3 months.
 
 ---
 
@@ -71,7 +74,7 @@ All other fields are optional; if missing, that part of the form is left empty.
 
 ```json
 {
-  "agent_name": "John Smith",
+  "companion_name": "John Smith",
   "personal_info": {
     "first_name": "SAHAR",
     "middle_name": "MICHAEL",
@@ -105,12 +108,15 @@ All other fields are optional; if missing, that part of the form is left empty.
     "lebanon_address": "Hotel Phoenicia, Beirut, Lebanon"
   },
   "visa_info": {
-    "type": "two_entry"
+    "type": "two_entry",
+    "duration_of_visit": "3 months"
   }
 }
 ```
 
-**visa_info.type** allowed values: `"single_entry"`, `"single"`, `"two_entry"`, `"double"`, `"multiple_entry"`, `"multiple"`.
+**visa_info.type:** `"single_entry"`, `"single"`, `"two_entry"`, `"double"`, `"multiple_entry"`, `"multiple"`.
+
+**visa_info.duration_of_visit** or **visa_info.duration:** `"15 days"`, `"15_days"`, `"1 month"`, `"one_month"`, `"3 months"`, `"three_months"`, `"6 months"`, `"six_months"`. Send the duration you want; we do not default to 3 months.
 
 ---
 

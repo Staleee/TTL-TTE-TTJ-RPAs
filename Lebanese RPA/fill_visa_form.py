@@ -107,6 +107,12 @@ def insert_text(page, x: float, y: float, text: str, fontsize: int = FONT_SIZE):
         )
 
 
+def draw_yellow_highlight(page, x: float, y: float, size: float = 14):
+    """Draw a yellow highlight rectangle (e.g. for visa type / duration selection)."""
+    rect = fitz.Rect(x - 2, y - 2, x + size, y + size)
+    page.draw_rect(rect, fill=(1, 1, 0), color=(1, 1, 0))
+
+
 def insert_checkbox(page, x: float, y: float):
     """Insert a checkbox mark (X) at specified coordinates."""
     point = fitz.Point(x, y)
@@ -135,33 +141,31 @@ def redact_existing_dates(page):
 
 
 def fill_checkboxes(page, data: dict):
-    """Fill all checkbox fields based on data values."""
-    
+    """Draw yellow highlight on visa type and duration (no cross)."""
+    try:
+        page.wrap_contents()
+    except Exception:
+        pass
     # NOTE: Purpose of Trip is already in the PDF template (we don’t fill it)
     
-    # Visa Info
+    # Visa Info – visa type and duration highlighted in yellow (no cross)
     visa = data.get("visa_info", {})
     
-    # Visa Type
-    visa_type = visa.get("type", "").lower()
+    # Visa Type: yellow highlight on selected type
+    visa_type = (visa.get("type") or "").strip().lower()
     if visa_type in CHECKBOX_MAPPINGS["visa_type"]:
         checkbox_key = CHECKBOX_MAPPINGS["visa_type"][visa_type]
         if checkbox_key in FIELD_COORDINATES:
             x, y = FIELD_COORDINATES[checkbox_key]
-            insert_checkbox(page, x, y)
+            draw_yellow_highlight(page, x, y)
     
-    # Visa Duration - automatically determined by visa type
-    # Single/Two Entry = 3 months, Multiple Entry = 6 months
-    if visa_type in ("multiple_entry", "multiple"):
-        visa_duration = "six_months"
-    else:
-        visa_duration = "three_months"
-    
-    if visa_duration in CHECKBOX_MAPPINGS["visa_duration"]:
-        checkbox_key = CHECKBOX_MAPPINGS["visa_duration"][visa_duration]
+    # Visa Duration: from request (duration_of_visit or duration); no default 3 months
+    duration_raw = (visa.get("duration_of_visit") or visa.get("duration") or "").strip().lower()
+    if duration_raw and duration_raw in CHECKBOX_MAPPINGS["visa_duration"]:
+        checkbox_key = CHECKBOX_MAPPINGS["visa_duration"][duration_raw]
         if checkbox_key in FIELD_COORDINATES:
             x, y = FIELD_COORDINATES[checkbox_key]
-            insert_checkbox(page, x, y)
+            draw_yellow_highlight(page, x, y)
 
     # Purpose of Trip: not filled here – PDF template already has it
 
@@ -282,15 +286,16 @@ def fill_text_fields(page, data: dict):
             x, y = FIELD_COORDINATES["departure_date"]
             insert_text(page, x, y, str(arrival_to_dubai))
     
-    # Bottom right: Arabic "accompaniment of family" / agent_name (agent_name translated to Arabic when possible)
-    agent_name = (get_nested_value(data, "agent_name") or "").strip()
+    # Bottom right: always Arabic "companionship of family"; then " / " + companion_name (from request, translated to Arabic when possible)
+    companion_name = (get_nested_value(data, "companion_name") or "").strip()
     if "accompanied_by_arabic" in FIELD_COORDINATES:
-        if agent_name and TRANSLATION_SUPPORT:
-            agent_name_arabic = translate_to_arabic(agent_name)
-            text_to_show = ARABIC_ACCOMPANIMENT_OF_FAMILY + " / " + agent_name_arabic
-        else:
-            text_to_show = ARABIC_ACCOMPANIMENT_OF_FAMILY + (" / " + agent_name if agent_name else "")
         x, y = FIELD_COORDINATES["accompanied_by_arabic"]
+        # Always show the Arabic phrase (companionship of family)
+        if companion_name and TRANSLATION_SUPPORT:
+            companion_arabic = translate_to_arabic(companion_name)
+            text_to_show = ARABIC_ACCOMPANIMENT_OF_FAMILY + " / " + companion_arabic
+        else:
+            text_to_show = ARABIC_ACCOMPANIMENT_OF_FAMILY + (" / " + companion_name if companion_name else "")
         insert_arabic_text(page, x, y, text_to_show, fontsize=BOTTOM_LABEL_FONT_SIZE)
     
     # Add visa type pricing label on the left side

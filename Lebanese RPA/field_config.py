@@ -218,7 +218,7 @@ TEXT_FIELD_MAPPINGS = {
     "accommodation_info.lebanon_address": "lebanon_address",
 }
 
-# Bottom right: Arabic "accompaniment of family" then " / " then agent_name (from request body)
+# Bottom right: Arabic "companionship of family" then " / " then companion_name (from request body)
 ARABIC_ACCOMPANIMENT_OF_FAMILY = "ﺑﻤﺮاﻓﻘﺔ اﻟﻌﺎﺋﻠﺔ"
 
 # Visa type pricing labels
