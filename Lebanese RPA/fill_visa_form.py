@@ -214,60 +214,54 @@ def reshape_arabic_text(text: str) -> str:
 def insert_arabic_text(page, x: float, y: float, text: str, fontsize: int = FONT_SIZE):
     """Insert Arabic text at specified coordinates using an Arabic-supporting font."""
     if text and text.strip():
-        # Reshape the Arabic text for proper rendering
-        display_text = reshape_arabic_text(text)
         point = fitz.Point(x, y)
-        
-        # Try different Arabic font approaches in order of preference
-        font_attempts = [
-            # 1. Windows
+        # Try reshaped first, then raw – some fonts need one or the other
+        for display_text in [reshape_arabic_text(text), text]:
+            font_attempts = [
+                {"fontfile": "C:/Windows/Fonts/arial.ttf", "fontname": "Arial"},
+                {"fontfile": "C:/Windows/Fonts/tahoma.ttf", "fontname": "Tahoma"},
+                {"fontfile": "C:/Windows/Fonts/times.ttf", "fontname": "Times"},
+                {"fontfile": "/System/Library/Fonts/GeezaPro.ttc", "fontname": "GeezaPro"},
+                {"fontfile": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "fontname": "DejaVuSans"},
+                {"fontfile": "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf", "fontname": "NotoSansArabic"},
+                {"fontname": "figo"},
+            ]
+            for font_config in font_attempts:
+                try:
+                    page.insert_text(point, display_text, fontsize=fontsize, color=(0, 0, 0), **font_config)
+                    return
+                except Exception:
+                    continue
+        try:
+            page.insert_text(point, text, fontname="helv", fontsize=fontsize, color=(0, 0, 0))
+        except Exception:
+            pass
+
+
+def insert_bottom_right_arabic_phrase(page, x: float, y: float, fontsize: int = BOTTOM_LABEL_FONT_SIZE):
+    """Always insert the hardcoded Arabic 'companionship of family' so it actually shows. Tries raw then reshaped."""
+    phrase = ARABIC_ACCOMPANIMENT_OF_FAMILY
+    point = fitz.Point(x, y)
+    # Try raw phrase first (no reshaper) – often renders better
+    for text in [phrase, reshape_arabic_text(phrase)]:
+        for font_config in [
             {"fontfile": "C:/Windows/Fonts/arial.ttf", "fontname": "Arial"},
             {"fontfile": "C:/Windows/Fonts/tahoma.ttf", "fontname": "Tahoma"},
-            {"fontfile": "C:/Windows/Fonts/times.ttf", "fontname": "Times"},
-            # 2. macOS
+            {"fontfile": "C:/Windows/Fonts/arial.ttf", "fontname": "Arial"},  # retry Arial
             {"fontfile": "/System/Library/Fonts/GeezaPro.ttc", "fontname": "GeezaPro"},
-            {"fontfile": "/System/Library/Fonts/SFArabic.ttf", "fontname": "SFArabic"},
-            # 3. Linux
-            {"fontfile": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "fontname": "DejaVuSans"},
             {"fontfile": "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf", "fontname": "NotoSansArabic"},
-            {"fontfile": "/usr/share/fonts/truetype/freefont/FreeSans.ttf", "fontname": "FreeSans"},
-            # 4. PyMuPDF built-in
+            {"fontfile": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "fontname": "DejaVuSans"},
             {"fontname": "figo"},
-        ]
-        
-        text_inserted = False
-        last_error = None
-        
-        for font_config in font_attempts:
+        ]:
             try:
-                page.insert_text(
-                    point,
-                    display_text,
-                    fontsize=fontsize,
-                    color=(0, 0, 0),
-                    **font_config
-                )
-                text_inserted = True
-                print(f"✓ Arabic text inserted using: {font_config}")
-                break
-            except Exception as e:
-                last_error = e
+                page.insert_text(point, text, fontsize=fontsize, color=(0, 0, 0), **font_config)
+                return
+            except Exception:
                 continue
-        
-        # If all attempts failed, try with base Helvetica (won't render Arabic properly but better than nothing)
-        if not text_inserted:
-            try:
-                print(f"Warning: All preferred fonts failed, using fallback. Last error: {last_error}")
-                page.insert_text(
-                    point,
-                    display_text,
-                    fontname="helv",
-                    fontsize=fontsize,
-                    color=(0, 0, 0),
-                )
-                print("⚠ Arabic text inserted with Helvetica (may not render correctly)")
-            except Exception as e:
-                print(f"Error: Failed to insert Arabic text: {e}")
+    try:
+        page.insert_text(point, phrase, fontname="helv", fontsize=fontsize, color=(0, 0, 0))
+    except Exception:
+        pass
 
 
 def fill_text_fields(page, data: dict):
@@ -300,15 +294,15 @@ def fill_text_fields(page, data: dict):
             x, y = FIELD_COORDINATES["departure_date"]
             insert_text(page, x, y, str(arrival_to_dubai))
     
-    # Bottom right: ALWAYS show Arabic "companionship of family" (hardcoded), then " / " + companion_name if provided
+    # Bottom right (inside frame): ALWAYS the Arabic phrase "companionship of family", then " / " + companion if provided
     if "accompanied_by_arabic" in FIELD_COORDINATES:
         x, y = FIELD_COORDINATES["accompanied_by_arabic"]
-        # 1) Always insert the Arabic phrase first (hardcoded – we always know to put it)
-        insert_arabic_text(page, x, y, ARABIC_ACCOMPANIMENT_OF_FAMILY, fontsize=BOTTOM_LABEL_FONT_SIZE)
-        # 2) Then companion name if present (as-is); approximate offset so it appears after the phrase
+        # 1) Hardcoded Arabic phrase – always inserted so it shows
+        insert_bottom_right_arabic_phrase(page, x, y, BOTTOM_LABEL_FONT_SIZE)
+        # 2) Companion name after the phrase (offset so we stay in frame)
         companion_name = (get_nested_value(data, "companion_name") or get_nested_value(data, "accompany_name") or "").strip()
         if companion_name:
-            x_companion = x + 95  # width of "بمرافقة العائلة" at ~14pt so " / Name" follows
+            x_companion = x + 88
             insert_arabic_text(page, x_companion, y, " / " + companion_name, fontsize=BOTTOM_LABEL_FONT_SIZE)
     
     # Bottom left: dynamic label from visa type + duration (e.g. "Two Entry 6M AED 465")

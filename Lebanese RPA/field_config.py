@@ -138,8 +138,8 @@ FIELD_COORDINATES = {
     "signature_date": (295, 644),
     
     # ===== ARABIC ACCOMPANIMENT TEXT =====
-    # Bottom right of page - "ﺑﻤﺮاﻓﻘﺔ" + Arabic name
-    "accompanied_by_arabic": (450, 750),
+    # Bottom right, INSIDE the page frame (US Letter 612x792). Left edge at 340 so text stays in bounds.
+    "accompanied_by_arabic": (340, 738),
     
     # ===== VISA TYPE PRICING LABEL =====
     # Bottom left of page - same y-level as accompanied_by_arabic
