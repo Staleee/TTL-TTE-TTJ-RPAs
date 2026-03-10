@@ -263,43 +263,55 @@ BOTTOM_RIGHT_FALLBACK_ENGLISH = "Accompanied by family"
 _ARABIC_FONT_NAME = "NotoArabic"
 
 
+_PHRASE_WIDTH_PT = 105  # width of Arabic phrase at 14pt so companion is drawn to the right
+
+
 def insert_bottom_right_full_line(
     page, x: float, y: float, companion_name: str, fontsize: int = BOTTOM_LABEL_FONT_SIZE
 ):
-    """
-    Insert the whole bottom-right line in ONE go with ONE font so it actually shows (no tofu, companion included).
-    Uses the bundled Noto Arabic font; if missing, uses English 'Accompanied by family' + companion.
-    """
+    """Draw phrase then companion in TWO separate inserts with the same font so the name shows (no squares)."""
     phrase_ar = ARABIC_ACCOMPANIMENT_OF_FAMILY
-    if companion_name:
-        line_ar = phrase_ar + " / " + companion_name
-        line_en = BOTTOM_RIGHT_FALLBACK_ENGLISH + " / " + companion_name
-    else:
-        line_ar = phrase_ar
-        line_en = BOTTOM_RIGHT_FALLBACK_ENGLISH
-    point = fitz.Point(x, y)
     font_path = _ensure_arabic_font()
+    point = fitz.Point(x, y)
+    black = (0, 0, 0)
+    comp = (companion_name or "").strip()
+
     if font_path is not None and font_path.exists():
         try:
             page.insert_font(fontname=_ARABIC_FONT_NAME, fontfile=str(font_path))
-            # Reshape phrase and companion name so both render (no squares) – same font for whole line
             phrase_display = reshape_arabic_text(phrase_ar)
-            companion_display = reshape_arabic_text(companion_name) if companion_name else ""
-            text = phrase_display + (" / " + companion_display if companion_display else "")
-            page.insert_text(point, text, fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=(0, 0, 0))
+            page.insert_text(point, phrase_display, fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=black)
+            if comp:
+                comp_display = reshape_arabic_text(comp)
+                page.insert_text(
+                    fitz.Point(x + _PHRASE_WIDTH_PT, y),
+                    " / " + comp_display,
+                    fontname=_ARABIC_FONT_NAME,
+                    fontsize=fontsize,
+                    color=black,
+                )
             return
         except Exception:
-            try:
-                page.insert_font(fontname=_ARABIC_FONT_NAME, fontfile=str(font_path))
-                # Fallback: phrase reshaped, companion raw (for Latin names)
-                phrase_display = reshape_arabic_text(phrase_ar)
-                text = phrase_display + (" / " + companion_name if companion_name else "")
-                page.insert_text(point, text, fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=(0, 0, 0))
-                return
-            except Exception:
-                pass
+            pass
+        try:
+            page.insert_font(fontname=_ARABIC_FONT_NAME, fontfile=str(font_path))
+            phrase_display = reshape_arabic_text(phrase_ar)
+            page.insert_text(point, phrase_display, fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=black)
+            if comp:
+                page.insert_text(
+                    fitz.Point(x + _PHRASE_WIDTH_PT, y),
+                    " / " + comp,
+                    fontname=_ARABIC_FONT_NAME,
+                    fontsize=fontsize,
+                    color=black,
+                )
+            return
+        except Exception:
+            pass
+
+    line_en = BOTTOM_RIGHT_FALLBACK_ENGLISH + (" / " + comp if comp else "")
     try:
-        page.insert_text(point, line_en, fontname="helv", fontsize=fontsize, color=(0, 0, 0))
+        page.insert_text(point, line_en, fontname="helv", fontsize=fontsize, color=black)
     except Exception:
         pass
 

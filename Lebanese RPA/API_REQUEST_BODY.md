@@ -49,18 +49,24 @@ Send only what you have. Any field you omit stays empty on the form.
 **Bottom right – companion name (exact field to send):**  
 We always show the Arabic phrase “companionship of family”. To show a name next to it, send **one** of these **top-level** keys (same level as `personal_info`, not inside it):
 
-- **`companion_name`** ← preferred
+- **`companion_name`** ← use this
 - **`accompany_name`** ← also accepted
 
-Example – send this in your JSON body:
+**Minimal test body (copy-paste) to see the companion name:**
 ```json
 {
-  "companion_name": "أحمد حسن",
-  "personal_info": { ... }
+  "companion_name": "Ahmed Hassan",
+  "personal_info": {
+    "first_name": "SAHAR",
+    "last_name": "SMITH"
+  },
+  "visa_info": {
+    "type": "Double",
+    "duration": "three months"
+  }
 }
 ```
-or in English: `"companion_name": "Ahmed Hassan"`.  
-We use the same Arabic font for the phrase and the name, so both Arabic and Latin names render correctly.
+For Arabic name use e.g. `"companion_name": "أحمد حسن"`. The name is drawn in a second step with the same Arabic font so it should not show as squares.
 
 **Visa type and duration:** We highlight the selected option in **yellow** (no cross/tick). Duration comes from your request only; we do **not** default to 3 months.
 
