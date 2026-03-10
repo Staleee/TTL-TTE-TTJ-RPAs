@@ -46,7 +46,21 @@ Send only what you have. Any field you omit stays empty on the form.
 | **visa_info.type** | Visa type: yellow highlight + bottom-left. **Accepted:** `Single`, `Double`, `Multiple` (or Single Entry, Two Entry, Multiple Entry). |
 | **visa_info.duration_of_visit** or **visa_info.duration** | Duration: yellow highlight. **Accepted:** `15 days`, `one month`, `three months`, `six months`. We do **not** default. |
 
-**Bottom right:** You do **not** need to send anything to trigger it – we **always** fill it. We write the Arabic phrase “companionship of family” (بمرافقة العائلة) every time; if no Arabic font is available we write “Accompanied by family”. If you send **companion_name** (or **accompany_name**), we add “ / ” and the name as-is.
+**Bottom right – companion name (exact field to send):**  
+We always show the Arabic phrase “companionship of family”. To show a name next to it, send **one** of these **top-level** keys (same level as `personal_info`, not inside it):
+
+- **`companion_name`** ← preferred
+- **`accompany_name`** ← also accepted
+
+Example – send this in your JSON body:
+```json
+{
+  "companion_name": "أحمد حسن",
+  "personal_info": { ... }
+}
+```
+or in English: `"companion_name": "Ahmed Hassan"`.  
+We use the same Arabic font for the phrase and the name, so both Arabic and Latin names render correctly.
 
 **Visa type and duration:** We highlight the selected option in **yellow** (no cross/tick). Duration comes from your request only; we do **not** default to 3 months.
 
