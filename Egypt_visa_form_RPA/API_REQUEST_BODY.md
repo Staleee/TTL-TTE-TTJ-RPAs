@@ -87,13 +87,15 @@ Send a **POST** to `/generate-visa-pdf` with header **`Content-Type: application
 | **contact** | phone_number | Yes | e.g. `"+1234567890"` |
 | **relatives_in_egypt** | (array) | No | List of `{ "full_name": "...", "address": "..." }`. We fill the form with **`full_name` + ` or their family`** (e.g. `Fatima Ali or their family`). Send only the name; do not include the suffix in JSON. |
 | **callback_url** | (top-level) | No | Your receive-API URL. We POST the PDF + record_id here when done (two-API flow). |
-| **record_id** | (top-level) | No | Zoho record ID. When Zoho credentials are set (see below), we upload the PDF directly to this record. No callback_url needed. |
+| **record_id** | (top-level) | No | Zoho Creator record ID from your function. We **queue the job**, generate the PDF, then **only when the job is done** we call Zoho’s Upload REST API (URL built from `record_id` + env base/template). OAuth from Railway (**worker** service). No `callback_url` needed. |
 
 ---
 
 ## Zoho direct upload (record_id only, no callback_url)
 
-When **ZOHO_ACCESS_TOKEN** (and optionally **ZOHO_REFRESH_TOKEN** + **ZOHO_CLIENT_ID** + **ZOHO_CLIENT_SECRET**) are set in the environment, you can send **only `record_id`** and the visa data. We return **202** and upload the PDF directly to that Zoho Creator record using the [Upload File API v2.1](https://www.zoho.com/creator/help/api/v2.1/upload-file.html). No Receive API or callback_url needed.
+Send **`record_id`** on the **first** `POST /generate-visa-pdf` together with the visa JSON. We return **202** (with Redis) and the **worker** fills the form and builds the PDF. **After the PDF is ready**, we `POST` the file to Zoho using the [Upload File API v2.1](https://www.zoho.com/creator/help/api/v2.1/upload-file.html), with **`Authorization: Zoho-oauthtoken …`** from **ZOHO_REFRESH_TOKEN** + client id/secret (or access token) on the **worker**. We do **not** call Zoho before the PDF exists.
+
+Upload URL: see **ZOHO_CREDENTIALS.md** (`ZOHO_UPLOAD_URL_BASE` or `ZOHO_UPLOAD_URL_TEMPLATE`).
 
 **Request body (Zoho script):**
 

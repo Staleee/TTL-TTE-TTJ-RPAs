@@ -33,18 +33,19 @@ Because the worker is its own process, it keeps running until the job is done, s
 
 ## Part 2: What happens step by step (after setup)
 
-1. **Zoho** (or you) sends `POST /generate-visa-pdf` with JSON that includes `callback_url` and `record_id`.
-2. **Web service** receives the request. It sees `REDIS_URL` is set, so it:
+1. **Zoho** (or you) sends `POST /generate-visa-pdf` with JSON that includes **`record_id`** (Zoho upload when done) and/or **`callback_url`** (Receive API).
+2. **Web service** receives the request. If **`REDIS_URL`** is set and the body has **`record_id` or `callback_url`**, it:
    - Validates the payload.
    - Pushes a job to Redis (queue name: `egypt_visa_queue`).
-   - Optionally writes an initial “queued” status for that `record_id` in Redis.
-   - Returns **202** with a message like “Job queued…”
+   - Writes an initial “queued” status for that `record_id` in Redis (when `record_id` is present).
+   - Returns **202** — it does **not** need Zoho tokens on the web service; the **worker** uses `ZOHO_REFRESH_TOKEN` / `ZOHO_ACCESS_TOKEN` to call Zoho’s Upload File API when only `record_id` is sent.
 3. **Worker service** is always running in a loop:
    - It blocks on Redis: “give me the next job from `egypt_visa_queue`.”
-   - When a job appears, it runs the same logic as before: open browser, fill form, generate PDF.
-   - It POSTs the PDF (or an error) to the `callback_url` you sent, with `record_id`.
-   - It updates job status in Redis (so `GET /job-status?record_id=xxx` can show “done” or “failed”).
-4. **Zoho** receives the POST on its receive URL and attaches the PDF to the record.
+   - When a job appears, it runs: open browser, fill form, generate PDF.
+   - If the job has **`callback_url`**: POSTs the PDF (or error JSON) there.
+   - If the job has **`record_id`** and no callback URL: **uploads the PDF to Zoho Creator** (built-in upload URL + OAuth).
+   - It updates job status in Redis (`GET /job-status?record_id=xxx`).
+4. **Zoho** gets the file on the record (direct upload) or via your receive URL (callback).
 
 So: **linking Redis** means giving both the web service and the worker the **same Redis connection string** (`REDIS_URL`) so they use the same queue and the same status keys.
 

@@ -38,9 +38,32 @@ REDIS_QUEUE_KEY = 'egypt_visa_queue'
 REDIS_STATUS_PREFIX = 'egypt_visa:status:'
 JOB_STATUS_TTL = 86400  # 24h
 
-# Zoho Creator: direct upload to record (no Receive API). Build upload URL from record_id.
-ZOHO_UPLOAD_URL_BASE = "https://www.zohoapis.com/creator/v2.1/data/louay.sallakho_maids/visa-application-erp/report/Tourist_Visa_Report"
-ZOHO_REFRESH_URL = "https://accounts.zoho.com/oauth/v2/token"
+# Zoho Creator Upload File API v2.1 — called ONLY after the PDF job finishes (worker / background).
+# You send record_id on the first API call; we build the REST URL from it and POST the file with Railway OAuth.
+_DEFAULT_ZOHO_UPLOAD_URL_BASE = (
+    "https://www.zohoapis.com/creator/v2.1/data/louay.sallakho_maids/visa-application-erp/report/Tourist_Visa_Report"
+)
+# OAuth token endpoint (use ZOHO_OAUTH_TOKEN_URL for zoho.eu etc.)
+ZOHO_OAUTH_TOKEN_URL = (
+    (os.environ.get("ZOHO_OAUTH_TOKEN_URL") or os.environ.get("ZOHO_TOKEN_URL") or "https://accounts.zoho.com/oauth/v2/token").strip()
+)
+
+
+def _build_zoho_upload_url(record_id: str) -> str:
+    """
+    Build Zoho Upload File API URL for this record_id.
+    - Optional env ZOHO_UPLOAD_URL_TEMPLATE: full URL with placeholder {record_id}, e.g.
+      https://www.zohoapis.com/creator/v2.1/data/OWNER/app/report/REPORT/{record_id}/FIELD_LINK_NAME/upload
+    - Else ZOHO_UPLOAD_URL_BASE (or default) + /{record_id}/Visa_Application/upload
+    """
+    rid = (record_id or "").strip()
+    template = (os.environ.get("ZOHO_UPLOAD_URL_TEMPLATE") or "").strip()
+    if template:
+        if "{record_id}" not in template:
+            raise ValueError("ZOHO_UPLOAD_URL_TEMPLATE must contain {record_id}")
+        return template.format(record_id=rid)
+    base = (os.environ.get("ZOHO_UPLOAD_URL_BASE") or _DEFAULT_ZOHO_UPLOAD_URL_BASE).strip().rstrip("/")
+    return f"{base}/{rid}/Visa_Application/upload"
 _zoho_token_lock = threading.Lock()
 _zoho_access_token_cached = None  # refreshed token kept in memory
 
@@ -72,7 +95,7 @@ def _refresh_zoho_token():
         logger.warning("Zoho refresh skipped: set ZOHO_REFRESH_TOKEN, ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET")
         return None
     try:
-        r = requests.post(ZOHO_REFRESH_URL, data={
+        r = requests.post(ZOHO_OAUTH_TOKEN_URL, data={
             'grant_type': 'refresh_token',
             'refresh_token': refresh_token,
             'client_id': client_id,
@@ -131,10 +154,11 @@ def _set_job_status(record_id: str, data: dict, redis_client=None):
 
 
 def _run_generate_and_callback(application_data: dict, callback_url: str, record_id: str = None, redis_client=None, zoho_oauthtoken: str = None):
-    """Background: generate PDF then upload to Zoho or POST to callback_url.
-    - If callback_url is None and record_id is set: use built-in Zoho Upload API (ZOHO_ACCESS_TOKEN / refresh).
-    - If callback_url contains '{record_id}' and token: use Zoho Upload API with that URL template.
-    - Else: POST to callback_url (Receive API) with document + record_id.
+    """Background: generate PDF first; only then call Zoho or callback.
+    - record_id only (no callback_url): after PDF is ready, POST file to Zoho Upload REST API
+      (URL built from record_id + ZOHO_UPLOAD_URL_BASE / ZOHO_UPLOAD_URL_TEMPLATE; OAuth from Railway).
+    - callback_url with '{record_id}' + token: Zoho upload to that URL template.
+    - Else: POST PDF to callback_url (Receive API).
     """
     rid = (record_id and str(record_id).strip()) or None
     use_builtin_zoho = not (callback_url or '').strip() and rid
@@ -162,9 +186,9 @@ def _run_generate_and_callback(application_data: dict, callback_url: str, record
             logger.info(f"[record_id={rid}] PDF ready ({len(pdf_data)} bytes)")
 
             if use_builtin_zoho:
-                # Direct Zoho Upload API: we build URL and use stored token (refresh on 401)
-                upload_url = f"{ZOHO_UPLOAD_URL_BASE}/{rid}/Visa_Application/upload"
-                logger.info(f"[record_id={rid}] Uploading to Zoho: %s", upload_url)
+                # Zoho Upload REST API — only after PDF is ready; auth from Railway (refresh / access token)
+                upload_url = _build_zoho_upload_url(rid)
+                logger.info(f"[record_id={rid}] Job done — calling Zoho upload API: %s", upload_url)
                 r = _zoho_upload_pdf(upload_url, filename, pdf_data, rid)
             else:
                 token = (zoho_oauthtoken or os.environ.get('ZOHO_OAUTH_TOKEN') or '').strip()
@@ -310,7 +334,9 @@ def generate_visa_pdf():
 
         raw = request.get_json()
         callback_url = (raw.get('callback_url') or '').strip()
-        record_id = raw.get('record_id')  # Zoho record ID – we send it back in callback so Zoho can attach PDF
+        record_id = raw.get('record_id')  # Zoho record ID – worker uploads PDF to this record when done
+        if record_id is not None and record_id != '':
+            record_id = str(record_id).strip() or None
         application_data = {k: v for k, v in raw.items() if k not in META_KEYS}
 
         try:
@@ -331,19 +357,11 @@ def generate_visa_pdf():
                 'timestamp': datetime.now().isoformat()
             }), 400
 
-        # Async: 202 and process in background (Zoho direct upload when only record_id, or callback_url)
-        # Async Zoho upload when we have token (env) or can get one (refresh + client id/secret)
-        has_zoho_creds = bool(
-            (os.environ.get('ZOHO_ACCESS_TOKEN') or os.environ.get('ZOHO_OAUTH_TOKEN') or '').strip()
-            or (
-                (os.environ.get('ZOHO_REFRESH_TOKEN') or '').strip()
-                and (os.environ.get('ZOHO_CLIENT_ID') or '').strip()
-                and (os.environ.get('ZOHO_CLIENT_SECRET') or '').strip()
-            )
-        )
-        use_async = (record_id and has_zoho_creds) or callback_url
+        # Async: queue job whenever record_id OR callback_url is present (worker runs PDF + Zoho upload / callback).
+        # Web does not need Zoho env vars — worker holds ZOHO_REFRESH_TOKEN (or access token) for upload.
+        use_async = bool(record_id) or bool(callback_url)
         if use_async:
-            # When only record_id + Zoho creds: we upload directly to Zoho (no callback_url from client)
+            # record_id only → worker uploads to Zoho Upload API when done; callback_url → worker POSTs PDF there
             cb_url = callback_url if callback_url else ''
             redis_url = os.environ.get('REDIS_URL', '').strip()
             if redis_url:
@@ -358,13 +376,16 @@ def generate_visa_pdf():
                     }
                     r.lpush(REDIS_QUEUE_KEY, json.dumps(job))
                     if record_id:
-                        rid = str(record_id).strip()
-                        r.set(REDIS_STATUS_PREFIX + rid, json.dumps({
+                        r.set(REDIS_STATUS_PREFIX + record_id, json.dumps({
                             'status': 'queued',
                             'started_at': datetime.now().isoformat(),
                             'callback_sent': False,
                         }), ex=JOB_STATUS_TTL)
-                    logger.info(f"Enqueued job for record_id={record_id}" + (f", callback to {cb_url}" if cb_url else " (Zoho direct upload)"))
+                    logger.info(
+                        "Enqueued job for record_id=%s%s",
+                        record_id,
+                        f", callback to {cb_url}" if cb_url else " (worker will upload to Zoho when done)",
+                    )
                 except Exception as e:
                     logger.exception(f"Failed to enqueue job: {e}")
                     return jsonify({
@@ -374,7 +395,11 @@ def generate_visa_pdf():
                     }), 503
                 return jsonify({
                     'status': 'accepted',
-                    'message': 'Job queued. PDF will be uploaded to Zoho record when done.' if (record_id and has_zoho_creds and not cb_url) else 'Job queued. Worker will generate PDF and POST to callback_url when done.',
+                    'message': (
+                        'Job queued. Worker will generate PDF and upload to Zoho when done.'
+                        if (record_id and not cb_url)
+                        else 'Job queued. Worker will generate PDF and POST to callback_url when done.'
+                    ),
                     'record_id': record_id,
                     'timestamp': datetime.now().isoformat()
                 }), 202
@@ -388,7 +413,11 @@ def generate_visa_pdf():
             thread.start()
             return jsonify({
                 'status': 'accepted',
-                'message': 'PDF will be uploaded to Zoho record when done.' if (record_id and has_zoho_creds and not cb_url) else 'Processing in background. PDF will be POSTed to callback_url when done.',
+                'message': (
+                    'Processing in background. PDF will be uploaded to Zoho when done.'
+                    if (record_id and not cb_url)
+                    else 'Processing in background. PDF will be POSTed to callback_url when done.'
+                ),
                 'record_id': record_id,
                 'timestamp': datetime.now().isoformat()
             }), 202

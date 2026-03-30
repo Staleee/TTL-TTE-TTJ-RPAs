@@ -39,17 +39,30 @@ RUN wget -q -O /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-
     && rm /tmp/google-chrome.deb \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ChromeDriver (using Chrome for Testing)
-RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}') \
-    && echo "Chrome version: $CHROME_VERSION" \
-    && CHROMEDRIVER_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chromedriver-linux64.zip" \
-    && echo "Downloading ChromeDriver from: $CHROMEDRIVER_URL" \
-    && wget -q -O /tmp/chromedriver.zip "$CHROMEDRIVER_URL" \
-    && unzip /tmp/chromedriver.zip -d /tmp/ \
-    && mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
-    && chmod +x /usr/local/bin/chromedriver \
-    && rm -rf /tmp/chromedriver.zip /tmp/chromedriver-linux64 \
-    && chromedriver --version
+# ChromeDriver: exact Chrome build is often NOT on the CfT bucket (wget exit 8 = 404).
+# Try exact version first; else use Google's LATEST_RELEASE_<major> for a published driver.
+ARG CHROMEDRIVER_FALLBACK_VER=131.0.6778.264
+RUN set -eux; \
+    FULL_VER=$(google-chrome --version | awk '{print $3}'); \
+    MAJOR=$(echo "$FULL_VER" | cut -d. -f1); \
+    BASE="https://storage.googleapis.com/chrome-for-testing-public"; \
+    ZIP_PATH="linux64/chromedriver-linux64.zip"; \
+    echo "Installed Chrome: $FULL_VER (major $MAJOR)"; \
+    if curl -fsS -o /dev/null --head "${BASE}/${FULL_VER}/${ZIP_PATH}"; then \
+      DRIVER_VER="$FULL_VER"; \
+      echo "Using exact-match ChromeDriver: $DRIVER_VER"; \
+    elif DRIVER_VER=$(curl -fsSL "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${MAJOR}"); then \
+      echo "Using CfT LATEST_RELEASE_${MAJOR}: $DRIVER_VER"; \
+    else \
+      DRIVER_VER="${CHROMEDRIVER_FALLBACK_VER}"; \
+      echo "Fallback pinned ChromeDriver: $DRIVER_VER"; \
+    fi; \
+    wget -q -O /tmp/chromedriver.zip "${BASE}/${DRIVER_VER}/${ZIP_PATH}"; \
+    unzip -q /tmp/chromedriver.zip -d /tmp/; \
+    mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver; \
+    chmod +x /usr/local/bin/chromedriver; \
+    rm -rf /tmp/chromedriver.zip /tmp/chromedriver-linux64; \
+    chromedriver --version
 
 # Set working directory
 WORKDIR /app
