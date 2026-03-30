@@ -85,7 +85,7 @@ Send a **POST** to `/generate-visa-pdf` with header **`Content-Type: application
 | | address_in_egypt | Yes | Where staying in Egypt |
 | | port_of_entry | Yes | e.g. `"Cairo International Airport"` |
 | **contact** | phone_number | Yes | e.g. `"+1234567890"` |
-| **relatives_in_egypt** | (array) | No | List of `{ "full_name": "...", "address": "..." }` |
+| **relatives_in_egypt** | (array) | No | List of `{ "full_name": "...", "address": "..." }`. We fill the form with **`full_name` + ` or their family`** (e.g. `Fatima Ali or their family`). Send only the name; do not include the suffix in JSON. |
 | **callback_url** | (top-level) | No | Your receive-API URL. We POST the PDF + record_id here when done (two-API flow). |
 | **record_id** | (top-level) | No | Zoho record ID. When Zoho credentials are set (see below), we upload the PDF directly to this record. No callback_url needed. |
 

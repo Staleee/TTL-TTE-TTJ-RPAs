@@ -518,8 +518,10 @@ class VisaFormFiller:
         
         for idx, relative in enumerate(app.relatives):
             if idx == 0:
-                # First relative uses default fields
-                self.auto.fill_text_field('relative_name', relative.full_name)
+                # First relative uses default fields; append " or their family" after companion name
+                name = (relative.full_name or "").strip()
+                relative_display = f"{name} or their family" if name else ""
+                self.auto.fill_text_field('relative_name', relative_display)
                 self.auto.fill_text_field('relative_address', relative.address)
             else:
                 # Additional relatives - click "Add another person" button
