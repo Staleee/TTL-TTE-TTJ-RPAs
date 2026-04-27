@@ -268,6 +268,14 @@ TYPE_DISPLAY = {"single_entry": "Single Entry", "two_entry": "Two Entry", "multi
 DURATION_DISPLAY = {"15_days": "15 days", "1_month": "1M", "3_months": "3M", "6_months": "6M"}
 DEFAULT_PRICE = {"single_entry": "325", "two_entry": "465", "multiple_entry": "645"}
 
+# Deterministic mapping from visa type to duration (ZERP-58):
+# Single Entry -> Three Months, Double/Two Entry -> Six Months, Multiple Entry -> Six Months
+VISA_TYPE_TO_DURATION = {
+    "single_entry": "3_months",
+    "two_entry": "6_months",
+    "multiple_entry": "6_months",
+}
+
 
 def normalize_visa_type(raw: str) -> str:
     """Normalize visa type to single_entry, two_entry, or multiple_entry."""
@@ -299,17 +307,30 @@ def normalize_duration(raw: str) -> str:
     return ""
 
 
-def get_bottom_left_label(visa_type: str, duration: str) -> str:
-    """Return dynamic bottom-left label from visa type and duration."""
+def derive_duration_from_type(visa_type: str) -> str:
+    """Return the normalized duration key deterministically derived from visa type (ZERP-58).
+
+    Single Entry -> 3_months, Two/Double Entry -> 6_months, Multiple Entry -> 6_months.
+    Returns "" if the type is unknown.
+    """
     ntype = normalize_visa_type(visa_type)
-    ndur = normalize_duration(duration)
+    return VISA_TYPE_TO_DURATION.get(ntype, "")
+
+
+def get_bottom_left_label(visa_type: str, duration: str = "") -> str:
+    """Return dynamic bottom-left label from visa type.
+
+    Duration is derived from visa type per ZERP-58; the `duration` argument is
+    kept for backward compatibility but ignored when the derived duration is
+    available.
+    """
+    ntype = normalize_visa_type(visa_type)
+    ndur = derive_duration_from_type(visa_type) or normalize_duration(duration)
     if (ntype, ndur) in BOTTOM_LEFT_LABELS:
         return BOTTOM_LEFT_LABELS[(ntype, ndur)]
     if ntype and ndur:
         return f"{TYPE_DISPLAY.get(ntype, ntype)} {DURATION_DISPLAY.get(ndur, ndur)} AED {DEFAULT_PRICE.get(ntype, '')}"
     if ntype:
-        # Only type: use 3M for single/two, 6M for multiple
-        ndur = "6_months" if ntype == "multiple_entry" else "3_months"
-        return BOTTOM_LEFT_LABELS.get((ntype, ndur), f"{TYPE_DISPLAY.get(ntype, ntype)} AED {DEFAULT_PRICE.get(ntype, '')}")
+        return f"{TYPE_DISPLAY.get(ntype, ntype)} AED {DEFAULT_PRICE.get(ntype, '')}"
     return ""
 

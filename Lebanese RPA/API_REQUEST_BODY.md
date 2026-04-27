@@ -6,6 +6,23 @@ Use this for **POST /generate** or **POST /webhook**.
 
 ---
 
+## ZERP-58 changes (summary)
+
+### Implemented on this RPA side
+
+- **Visa duration** is derived from `visa_info.type` (Single → 3M, Double → 6M, Multiple → 6M). Any duration sent in the payload is ignored.
+- **Highlight color** for visa type / duration is **dark yellow** – matches the pre-printed dark yellow of field 21.
+- **Companion / client name** accepted as any of `companion_name`, `accompany_name`, or `client_name` (top-level). The name is rendered next to the Arabic phrase `بمرافقة العائلة`.
+
+### To be implemented in the calling project (Pro / Zoho Deluge)
+
+- [ ] **Issuing country (field 09):** map Zoho's country-of-issue into `passport_info.issuing_country`. The RPA has always written that key into field 09, so the wrong text showing up means Pro is sending the issuing authority under that key; send the country instead.
+- [ ] **Fields 22 & 23 (Lebanon location):** generate the address via ChatGPT with the prompt `Generate a location in Lebanon using the following format: [Street Number + Street Name], [Area/City], [District], [Governorate].` and send it into the **two separate** JSON fields `accommodation_info.contact_person` (field 22) and `accommodation_info.lebanon_address` (field 23). Do **not** concatenate.
+- [ ] **Companion / client name:** always populate `companion_name` (or fall back to `client_name`) in the payload so it renders next to `بمرافقة العائلة`.
+- [ ] **Stop sending `visa_info.duration` / `visa_info.duration_of_visit`** (harmless but unused now).
+
+---
+
 ## Already in the PDF (we do not fill these)
 
 - **Job title (Title/Position):** Domestic Worker  
@@ -21,7 +38,7 @@ Send only what you have. Any field you omit stays empty on the form.
 
 | You send (JSON path) | We fill on the form |
 |----------------------|----------------------|
-| **companion_name** or **accompany_name** (top-level) | Bottom right: Arabic “companionship of family” is always shown; if you send this, we add “ / ” + name **as-is** (no translation) |
+| **companion_name** or **accompany_name** or **client_name** (top-level) | Bottom right: Arabic “companionship of family” is always shown; if you send this, we add “ / ” + name **as-is** (no translation) |
 | **personal_info.first_name** | First name |
 | **personal_info.middle_name** | Middle name |
 | **personal_info.last_name** | Last name |
@@ -41,16 +58,17 @@ Send only what you have. Any field you omit stays empty on the form.
 | **trip_info.departure_date_from_dubai** | Trip start date + Expected arrival (same value) |
 | **trip_info.arrival_date_to_dubai** | Trip end date + Expected departure (same value) |
 | **trip_info.other_purpose** | “Other (specify)” text (only if purpose is other) |
-| **accommodation_info.contact_person** | Contact person in Lebanon |
-| **accommodation_info.lebanon_address** | Address of stay in Lebanon |
-| **visa_info.type** | Visa type: yellow highlight + bottom-left. **Accepted:** `Single`, `Double`, `Multiple` (or Single Entry, Two Entry, Multiple Entry). |
-| **visa_info.duration_of_visit** or **visa_info.duration** | Duration: yellow highlight. **Accepted:** `15 days`, `one month`, `three months`, `six months`. We do **not** default. |
+| **accommodation_info.contact_person** | Field 22 – Contact person / address in Lebanon (separate field, **not** concatenated with field 23) |
+| **accommodation_info.lebanon_address** | Field 23 – Address of stay in Lebanon |
+| **visa_info.type** | Visa type: dark-yellow highlight + bottom-left label. **Accepted:** `Single`, `Double`, `Multiple` (or Single Entry, Two Entry, Multiple Entry). Duration is **derived from type** (see below). |
+| ~~**visa_info.duration_of_visit** / **visa_info.duration**~~ | **No longer used** – duration is derived deterministically from the visa type (Single → 3M, Double → 6M, Multiple → 6M). Any value sent is ignored. |
 
-**Bottom right – companion name (exact field to send):**  
+**Bottom right – companion / client name (exact field to send):**
 We always show the Arabic phrase “companionship of family”. To show a name next to it, send **one** of these **top-level** keys (same level as `personal_info`, not inside it):
 
-- **`companion_name`** ← use this
+- **`companion_name`** ← preferred
 - **`accompany_name`** ← also accepted
+- **`client_name`** ← also accepted (useful when Pro only has the client name)
 
 **Minimal test body (copy-paste) to see the companion name:**
 ```json
@@ -61,14 +79,13 @@ We always show the Arabic phrase “companionship of family”. To show a name n
     "last_name": "SMITH"
   },
   "visa_info": {
-    "type": "Double",
-    "duration": "three months"
+    "type": "Double"
   }
 }
 ```
 For Arabic name use e.g. `"companion_name": "أحمد حسن"`. The name is drawn in a second step with the same Arabic font so it should not show as squares.
 
-**Visa type and duration:** We highlight the selected option in **yellow** (no cross/tick). Duration comes from your request only; we do **not** default to 3 months.
+**Visa type and duration:** We highlight the selected visa type and the matching duration row in **dark yellow** (no cross/tick). The duration is derived **only** from the visa type: Single → 3 months, Double → 6 months, Multiple → 6 months. Any `duration` / `duration_of_visit` sent in the payload is ignored.
 
 ---
 
@@ -128,15 +145,14 @@ All other fields are optional; if missing, that part of the form is left empty.
     "lebanon_address": "Hotel Phoenicia, Beirut, Lebanon"
   },
   "visa_info": {
-    "type": "two_entry",
-    "duration_of_visit": "3 months"
+    "type": "two_entry"
   }
 }
 ```
 
 **visa_info.type:** Accepted values: **Single**, **Double**, **Multiple** (what Zoho sends). We also accept "Single Entry", "Double Entry", "Multiple Entry".
 
-**visa_info.duration** or **visa_info.duration_of_visit:** Accepted values: **15 days**, **one month**, **three months**, **six months**. We do not default.
+**Duration:** No longer accepted from the payload – it is derived from `visa_info.type` (Single → 3M, Double → 6M, Multiple → 6M).
 
 ---
 
@@ -154,8 +170,8 @@ The API expects the same shape as built by your Deluge function. Summary:
 | Visa refusal, `rec.Travelled_Before`, criminal | **travel_history** .visa_refusal_details, .lebanon_previous_visits, .criminal_record_details | |
 | `arrStr`, `depStr` | **trip_info** .departure_date_from_dubai, .arrival_date_to_dubai | dd/MM/yyyy |
 | `rec.Client_Phone_Number`, `rec.Location_in_Lebanon` | **accommodation_info** .contact_person, .lebanon_address | |
-| `rec.Visa_Type` | **visa_info** .type | e.g. "Single Entry", "Double Entry", "Multiple Entry" |
-| `rec.Duration_of_Visa.toString()` | **visa_info** .duration | e.g. "3 months", "6 months" (we also accept .duration_of_visit) |
+| `rec.Visa_Type` | **visa_info** .type | e.g. "Single Entry", "Double Entry", "Multiple Entry". Duration is derived from this on the RPA side. |
+| ~~`rec.Duration_of_Visa`~~ | — | **No longer sent.** Duration is derived from `visa_info.type`. |
 
 **Endpoint used in Deluge:** `POST https://travel-to-lebanon-production.up.railway.app/generate` with `Content-Type: application/json` and body = payload as JSON.
 

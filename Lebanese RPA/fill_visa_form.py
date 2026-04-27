@@ -62,7 +62,6 @@ except ImportError:
 
 from field_config import (
     FIELD_COORDINATES,
-    CHECKBOX_MAPPINGS,
     TEXT_FIELD_MAPPINGS,
     FONT_NAME,
     FONT_SIZE,
@@ -72,7 +71,9 @@ from field_config import (
     BOTTOM_LABEL_FONT_SIZE,
     VISA_TYPE_TEXT_RECTS,
     VISA_DURATION_TEXT_RECTS,
+    derive_duration_from_type,
     get_bottom_left_label,
+    normalize_visa_type,
 )
 
 
@@ -129,13 +130,43 @@ def insert_text(page, x: float, y: float, text: str, fontsize: int = FONT_SIZE):
         )
 
 
+HIGHLIGHTER_YELLOW_RGB = (1.0, 1.0, 0.0)
+
+
 def draw_yellow_text_highlight(page, x: float, y: float, width: float, height: float):
-    """Draw semi-transparent yellow highlight so the text underneath still shows (highlighter effect)."""
+    """Draw a pure-yellow highlighter mark over the existing form text.
+
+    To match the pre-printed highlighter strokes already on the template
+    (``Single`` in field 17, ``Tourism`` in field 21), we add a real PDF
+    highlight annotation. Highlight annots use the PDF ``Multiply`` blend
+    mode under the hood, so the white space around the glyphs renders as
+    saturated #FFFF00 while the black/dark text underneath is preserved –
+    exactly the look we get from a physical yellow marker.
+
+    A rectangular fallback (still pure yellow, just alpha-blended) is used
+    if the annotation API isn't available in the installed PyMuPDF version.
+    """
     rect = fitz.Rect(x, y, x + width, y + height)
+
     try:
-        page.draw_rect(rect, fill=(1, 1, 0), color=(1, 1, 0), fill_opacity=0.4)
+        annot = page.add_highlight_annot(rect)
+        annot.set_colors(stroke=HIGHLIGHTER_YELLOW_RGB)
+        annot.update()
+        return
+    except Exception:
+        pass
+
+    try:
+        page.draw_rect(
+            rect,
+            fill=HIGHLIGHTER_YELLOW_RGB,
+            color=None,
+            width=0,
+            fill_opacity=0.85,
+            stroke_opacity=0,
+        )
     except TypeError:
-        page.draw_rect(rect, fill=(1, 1, 0), color=(1, 1, 0))
+        page.draw_rect(rect, fill=HIGHLIGHTER_YELLOW_RGB, color=None, width=0)
 
 
 def insert_checkbox(page, x: float, y: float):
@@ -166,36 +197,43 @@ def redact_existing_dates(page):
 
 
 def fill_checkboxes(page, data: dict):
-    """Draw yellow highlight on visa type and duration (no cross)."""
+    """Draw yellow highlight on visa type and the derived duration (no cross)."""
     try:
         page.wrap_contents()
     except Exception:
         pass
     # NOTE: Purpose of Trip is already in the PDF template (we don’t fill it)
-    
-    # Visa Info – visa type and duration highlighted in yellow (no cross)
+
+    # Visa Info – visa type and duration highlighted in yellow (no cross).
+    # Per ZERP-58 the duration is deterministically derived from the type
+    # (Single -> 3M, Double -> 6M, Multiple -> 6M) and any duration sent in the
+    # payload is ignored.
     visa = data.get("visa_info", {})
-    
-    # Visa Type: yellow highlight on the actual text (Single Entry / Two Entry / Multiple Entry)
     visa_type_raw = (visa.get("type") or "").strip()
-    visa_type = visa_type_raw.lower().replace(" ", "_")
-    if not visa_type and " " in visa_type_raw:
-        visa_type = visa_type_raw.lower()
-    if visa_type in CHECKBOX_MAPPINGS["visa_type"]:
-        checkbox_key = CHECKBOX_MAPPINGS["visa_type"][visa_type]
-        if checkbox_key in VISA_TYPE_TEXT_RECTS:
-            x, y, w, h = VISA_TYPE_TEXT_RECTS[checkbox_key]
+
+    # Visa Type highlight
+    normalized_type = normalize_visa_type(visa_type_raw)
+    if normalized_type:
+        type_checkbox_key = {
+            "single_entry": "checkbox_single_entry",
+            "two_entry": "checkbox_two_entry",
+            "multiple_entry": "checkbox_multiple_entry",
+        }[normalized_type]
+        if type_checkbox_key in VISA_TYPE_TEXT_RECTS:
+            x, y, w, h = VISA_TYPE_TEXT_RECTS[type_checkbox_key]
             draw_yellow_text_highlight(page, x, y, w, h)
-    
-    # Visa Duration: yellow highlight on the actual text (15 days / 1 month / 3 months / 6 months)
-    duration_raw = (visa.get("duration_of_visit") or visa.get("duration") or "").strip()
-    duration_key = duration_raw.lower().replace(" ", "_") if duration_raw else ""
-    if not duration_key and duration_raw:
-        duration_key = duration_raw.lower()
-    if duration_key and duration_key in CHECKBOX_MAPPINGS["visa_duration"]:
-        checkbox_key = CHECKBOX_MAPPINGS["visa_duration"][duration_key]
-        if checkbox_key in VISA_DURATION_TEXT_RECTS:
-            x, y, w, h = VISA_DURATION_TEXT_RECTS[checkbox_key]
+
+    # Visa Duration highlight – always derived from the type
+    derived_duration = derive_duration_from_type(visa_type_raw)
+    if derived_duration:
+        duration_checkbox_key = {
+            "15_days": "checkbox_15_days",
+            "1_month": "checkbox_one_month",
+            "3_months": "checkbox_three_months",
+            "6_months": "checkbox_six_months",
+        }.get(derived_duration)
+        if duration_checkbox_key and duration_checkbox_key in VISA_DURATION_TEXT_RECTS:
+            x, y, w, h = VISA_DURATION_TEXT_RECTS[duration_checkbox_key]
             draw_yellow_text_highlight(page, x, y, w, h)
 
     # Purpose of Trip: not filled here – PDF template already has it
@@ -266,45 +304,54 @@ _ARABIC_FONT_NAME = "NotoArabic"
 _PHRASE_WIDTH_PT = 105  # width of Arabic phrase at 14pt so companion is drawn to the right
 
 
+def _has_arabic(text: str) -> bool:
+    """Return True if `text` contains any Arabic script character."""
+    return any("\u0600" <= ch <= "\u06ff" or "\ufb50" <= ch <= "\ufeff" for ch in text)
+
+
 def insert_bottom_right_full_line(
     page, x: float, y: float, companion_name: str, fontsize: int = BOTTOM_LABEL_FONT_SIZE
 ):
-    """Draw phrase then companion in TWO separate inserts with the same font so the name shows (no squares)."""
+    """Draw the Arabic phrase ``بمرافقة العائلة`` then the companion name.
+
+    The Arabic phrase is always drawn with the bundled Arabic font. The
+    companion name is drawn with the Arabic font only when it contains Arabic
+    characters; otherwise Helvetica is used so Latin names render correctly
+    (ZERP-58 – the name must be visible next to the Arabic phrase).
+    """
     phrase_ar = ARABIC_ACCOMPANIMENT_OF_FAMILY
     font_path = _ensure_arabic_font()
     point = fitz.Point(x, y)
     black = (0, 0, 0)
     comp = (companion_name or "").strip()
 
+    def _draw_companion(comp_value: str) -> None:
+        if not comp_value:
+            return
+        comp_point = fitz.Point(x + _PHRASE_WIDTH_PT, y)
+        if _has_arabic(comp_value):
+            page.insert_text(
+                comp_point,
+                " / " + reshape_arabic_text(comp_value),
+                fontname=_ARABIC_FONT_NAME,
+                fontsize=fontsize,
+                color=black,
+            )
+        else:
+            page.insert_text(
+                comp_point,
+                " / " + comp_value,
+                fontname="helv",
+                fontsize=fontsize,
+                color=black,
+            )
+
     if font_path is not None and font_path.exists():
         try:
             page.insert_font(fontname=_ARABIC_FONT_NAME, fontfile=str(font_path))
             phrase_display = reshape_arabic_text(phrase_ar)
             page.insert_text(point, phrase_display, fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=black)
-            if comp:
-                comp_display = reshape_arabic_text(comp)
-                page.insert_text(
-                    fitz.Point(x + _PHRASE_WIDTH_PT, y),
-                    " / " + comp_display,
-                    fontname=_ARABIC_FONT_NAME,
-                    fontsize=fontsize,
-                    color=black,
-                )
-            return
-        except Exception:
-            pass
-        try:
-            page.insert_font(fontname=_ARABIC_FONT_NAME, fontfile=str(font_path))
-            phrase_display = reshape_arabic_text(phrase_ar)
-            page.insert_text(point, phrase_display, fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=black)
-            if comp:
-                page.insert_text(
-                    fitz.Point(x + _PHRASE_WIDTH_PT, y),
-                    " / " + comp,
-                    fontname=_ARABIC_FONT_NAME,
-                    fontsize=fontsize,
-                    color=black,
-                )
+            _draw_companion(comp)
             return
         except Exception:
             pass
@@ -349,14 +396,19 @@ def fill_text_fields(page, data: dict):
     # Bottom right: one line, one font – Arabic phrase + companion so nothing is tofu and companion always shows
     if "accompanied_by_arabic" in FIELD_COORDINATES:
         x, y = FIELD_COORDINATES["accompanied_by_arabic"]
-        companion_name = (get_nested_value(data, "companion_name") or get_nested_value(data, "accompany_name") or "").strip()
+        companion_name = (
+            get_nested_value(data, "companion_name")
+            or get_nested_value(data, "accompany_name")
+            or get_nested_value(data, "client_name")
+            or ""
+        ).strip()
         insert_bottom_right_full_line(page, x, y, companion_name, BOTTOM_LABEL_FONT_SIZE)
     
-    # Bottom left: dynamic label from visa type + duration (e.g. "Two Entry 6M AED 465")
+    # Bottom left: dynamic label from visa type (duration derived per ZERP-58,
+    # e.g. "Two Entry 6M AED 465")
     visa = data.get("visa_info", {})
     visa_type = visa.get("type") or ""
-    duration = visa.get("duration_of_visit") or visa.get("duration") or ""
-    label_text = get_bottom_left_label(visa_type, duration)
+    label_text = get_bottom_left_label(visa_type)
     if label_text and "visa_type_label" in FIELD_COORDINATES:
         x, y = FIELD_COORDINATES["visa_type_label"]
         insert_text(page, x, y, label_text, fontsize=BOTTOM_LABEL_FONT_SIZE)
