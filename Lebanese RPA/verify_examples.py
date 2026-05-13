@@ -112,6 +112,35 @@ def main() -> None:
     arabic_companion["companion_name"] = "\u0623\u062d\u0645\u062f \u0639\u0644\u064a"  # أحمد علي
     _write_example("arabic_companion", arabic_companion)
 
+    # ── ZERP-120 verification scenarios ───────────────────────────────────
+    # #4 - companion name must render to the LEFT of "بمرافقة العائلة".
+    # Long Arabic name to make the layout obvious.
+    zerp120_arabic_long = _with_visa_type(base_no_companion, "two_entry")
+    zerp120_arabic_long["companion_name"] = (
+        "\u064a\u0627\u0633\u0645\u064a\u0646\u0627 "
+        "\u0627\u0646\u0637\u0648\u0627\u0646 \u0632\u064a\u0627\u062f "
+        "\u0645\u0641\u0631\u062c"
+    )  # ياسمينا انطوان زياد مفرج (matches the customer screenshot)
+    _write_example("zerp120_companion_arabic_long", zerp120_arabic_long)
+
+    # #2 - Double / Multiple entry: the `pro` payload sends an empty
+    # `arrival_date_to_dubai` so the form leaves field 19's end date and
+    # field 25 (Expected Departure) blank. Simulate that here by clearing
+    # the value in `trip_info`.
+    double_empty_dep = _with_visa_type(base, "double_entry")
+    double_empty_dep["trip_info"] = {
+        **double_empty_dep.get("trip_info", {}),
+        "arrival_date_to_dubai": "",
+    }
+    _write_example("zerp120_double_entry_empty_departure", double_empty_dep)
+
+    multiple_empty_dep = _with_visa_type(base, "multiple_entry")
+    multiple_empty_dep["trip_info"] = {
+        **multiple_empty_dep.get("trip_info", {}),
+        "arrival_date_to_dubai": "",
+    }
+    _write_example("zerp120_multiple_entry_empty_departure", multiple_empty_dep)
+
     print("Done.")
 
 

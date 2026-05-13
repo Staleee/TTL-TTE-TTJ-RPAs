@@ -12,7 +12,7 @@ Use this for **POST /generate** or **POST /webhook**.
 
 - **Visa duration** is derived from `visa_info.type` (Single → 3M, Double → 6M, Multiple → 6M). Any duration sent in the payload is ignored.
 - **Highlight color** for visa type / duration is **dark yellow** – matches the pre-printed dark yellow of field 21.
-- **Companion / client name** accepted as any of `companion_name`, `accompany_name`, or `client_name` (top-level). The name is rendered next to the Arabic phrase `بمرافقة العائلة`.
+- **Companion / client name** accepted as any of `companion_name`, `accompany_name`, or `client_name` (top-level). The name is rendered to the **left** of the Arabic phrase `بمرافقة العائلة` (ZERP-120 #4).
 
 ### To be implemented in the calling project (Pro / Zoho Deluge)
 
@@ -38,7 +38,7 @@ Send only what you have. Any field you omit stays empty on the form.
 
 | You send (JSON path) | We fill on the form |
 |----------------------|----------------------|
-| **companion_name** or **accompany_name** or **client_name** (top-level) | Bottom right: Arabic “companionship of family” is always shown; if you send this, we add “ / ” + name **as-is** (no translation) |
+| **companion_name** or **accompany_name** or **client_name** (top-level) | Bottom right: name **as-is** (no translation) is drawn first, then “ / ”, then the Arabic phrase “companionship of family”. The phrase is always shown even when no name is sent. |
 | **personal_info.first_name** | First name |
 | **personal_info.middle_name** | Middle name |
 | **personal_info.last_name** | Last name |

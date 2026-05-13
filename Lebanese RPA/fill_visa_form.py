@@ -301,7 +301,10 @@ BOTTOM_RIGHT_FALLBACK_ENGLISH = "Accompanied by family"
 _ARABIC_FONT_NAME = "NotoArabic"
 
 
-_PHRASE_WIDTH_PT = 105  # width of Arabic phrase at 14pt so companion is drawn to the right
+# ZERP-120 #4 - the companion name now renders on the LEFT of the Arabic
+# phrase, not the right. Width is measured at runtime per name, so this
+# constant is only used as a safe fallback when measurement fails.
+_PHRASE_WIDTH_PT = 105
 
 
 def _has_arabic(text: str) -> bool:
@@ -312,12 +315,14 @@ def _has_arabic(text: str) -> bool:
 def insert_bottom_right_full_line(
     page, x: float, y: float, companion_name: str, fontsize: int = BOTTOM_LABEL_FONT_SIZE
 ):
-    """Draw the Arabic phrase ``بمرافقة العائلة`` then the companion name.
+    """Draw the companion name first, then the Arabic phrase ``بمرافقة العائلة``.
 
-    The Arabic phrase is always drawn with the bundled Arabic font. The
-    companion name is drawn with the Arabic font only when it contains Arabic
-    characters; otherwise Helvetica is used so Latin names render correctly
-    (ZERP-58 – the name must be visible next to the Arabic phrase).
+    ZERP-120 #4 - the companion name must appear on the LEFT of the Arabic
+    phrase. We draw the name at ``x`` (anchored to the bottom-right block of
+    the form) and place the phrase to the right of it, offset by the rendered
+    width of the name + separator. Arabic names use the bundled Noto Arabic
+    font with reshaping/BiDi; Latin names use Helvetica. When no name is
+    present we just draw the phrase at ``x`` (legacy behaviour).
     """
     phrase_ar = ARABIC_ACCOMPANIMENT_OF_FAMILY
     font_path = _ensure_arabic_font()
@@ -325,38 +330,57 @@ def insert_bottom_right_full_line(
     black = (0, 0, 0)
     comp = (companion_name or "").strip()
 
-    def _draw_companion(comp_value: str) -> None:
-        if not comp_value:
-            return
-        comp_point = fitz.Point(x + _PHRASE_WIDTH_PT, y)
-        if _has_arabic(comp_value):
-            page.insert_text(
-                comp_point,
-                " / " + reshape_arabic_text(comp_value),
-                fontname=_ARABIC_FONT_NAME,
-                fontsize=fontsize,
-                color=black,
-            )
-        else:
-            page.insert_text(
-                comp_point,
-                " / " + comp_value,
-                fontname="helv",
-                fontsize=fontsize,
-                color=black,
-            )
-
     if font_path is not None and font_path.exists():
         try:
             page.insert_font(fontname=_ARABIC_FONT_NAME, fontfile=str(font_path))
             phrase_display = reshape_arabic_text(phrase_ar)
-            page.insert_text(point, phrase_display, fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=black)
-            _draw_companion(comp)
+
+            try:
+                arabic_font = fitz.Font(fontfile=str(font_path))
+            except Exception:
+                arabic_font = None
+
+            if not comp:
+                page.insert_text(
+                    point, phrase_display,
+                    fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=black,
+                )
+                return
+
+            comp_has_arabic = _has_arabic(comp)
+            comp_display = reshape_arabic_text(comp) if comp_has_arabic else comp
+            comp_font_name = _ARABIC_FONT_NAME if comp_has_arabic else "helv"
+
+            page.insert_text(
+                fitz.Point(x, y), comp_display,
+                fontname=comp_font_name, fontsize=fontsize, color=black,
+            )
+
+            try:
+                if comp_has_arabic and arabic_font is not None:
+                    comp_width = arabic_font.text_length(comp_display, fontsize=fontsize)
+                else:
+                    comp_width = fitz.get_text_length(comp_display, fontname="helv", fontsize=fontsize)
+            except Exception:
+                comp_width = _PHRASE_WIDTH_PT
+
+            sep = " / "
+            try:
+                sep_width = fitz.get_text_length(sep, fontname="helv", fontsize=fontsize)
+            except Exception:
+                sep_width = 6.0
+
+            page.insert_text(
+                fitz.Point(x + comp_width + sep_width, y), phrase_display,
+                fontname=_ARABIC_FONT_NAME, fontsize=fontsize, color=black,
+            )
             return
         except Exception:
             pass
 
-    line_en = BOTTOM_RIGHT_FALLBACK_ENGLISH + (" / " + comp if comp else "")
+    # No Arabic font available – fall back to a Latin-only line, still with
+    # the name on the left to match the new layout.
+    line_en = (comp + " / " + BOTTOM_RIGHT_FALLBACK_ENGLISH) if comp else BOTTOM_RIGHT_FALLBACK_ENGLISH
     try:
         page.insert_text(point, line_en, fontname="helv", fontsize=fontsize, color=black)
     except Exception:
