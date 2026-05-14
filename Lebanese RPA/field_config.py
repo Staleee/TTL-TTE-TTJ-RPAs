@@ -248,25 +248,27 @@ ARABIC_ACCOMPANIMENT_OF_FAMILY = "\u0628\u0645\u0631\u0627\u0641\u0642\u0629 \u0
 
 # Bottom left: dynamic label from visa type + duration -> "Type Duration AED Price"
 # Keys: (normalized_type, normalized_duration). Normalized: single_entry, two_entry, multiple_entry | 15_days, 1_month, 3_months, 6_months
+# ZERP-130: prices updated to Single 324, Double 460, Multiple 644.
 BOTTOM_LEFT_LABELS = {
-    ("single_entry", "15_days"): "Single Entry 15 days AED 325",
-    ("single_entry", "1_month"): "Single Entry 1M AED 325",
-    ("single_entry", "3_months"): "Single Entry 3M AED 325",
-    ("single_entry", "6_months"): "Single Entry 6M AED 325",
-    ("two_entry", "15_days"): "Two Entry 15 days AED 465",
-    ("two_entry", "1_month"): "Two Entry 1M AED 465",
-    ("two_entry", "3_months"): "Two Entry 3M AED 465",
-    ("two_entry", "6_months"): "Two Entry 6M AED 465",
-    ("multiple_entry", "15_days"): "Multiple Entry 15 days AED 645",
-    ("multiple_entry", "1_month"): "Multiple Entry 1M AED 645",
-    ("multiple_entry", "3_months"): "Multiple Entry 3M AED 645",
-    ("multiple_entry", "6_months"): "Multiple Entry 6M AED 645",
+    ("single_entry", "15_days"): "Single Entry 15 days AED 324",
+    ("single_entry", "1_month"): "Single Entry 1M AED 324",
+    ("single_entry", "3_months"): "Single Entry 3M AED 324",
+    ("single_entry", "6_months"): "Single Entry 6M AED 324",
+    ("two_entry", "15_days"): "Two Entry 15 days AED 460",
+    ("two_entry", "1_month"): "Two Entry 1M AED 460",
+    ("two_entry", "3_months"): "Two Entry 3M AED 460",
+    ("two_entry", "6_months"): "Two Entry 6M AED 460",
+    ("multiple_entry", "15_days"): "Multiple Entry 15 days AED 644",
+    ("multiple_entry", "1_month"): "Multiple Entry 1M AED 644",
+    ("multiple_entry", "3_months"): "Multiple Entry 3M AED 644",
+    ("multiple_entry", "6_months"): "Multiple Entry 6M AED 644",
 }
 
 # Display names for type/duration when building fallback label
 TYPE_DISPLAY = {"single_entry": "Single Entry", "two_entry": "Two Entry", "multiple_entry": "Multiple Entry"}
 DURATION_DISPLAY = {"15_days": "15 days", "1_month": "1M", "3_months": "3M", "6_months": "6M"}
-DEFAULT_PRICE = {"single_entry": "325", "two_entry": "465", "multiple_entry": "645"}
+# ZERP-130: keep these in sync with BOTTOM_LEFT_LABELS above.
+DEFAULT_PRICE = {"single_entry": "324", "two_entry": "460", "multiple_entry": "644"}
 
 # Deterministic mapping from visa type to duration (ZERP-58):
 # Single Entry -> Three Months, Double/Two Entry -> Six Months, Multiple Entry -> Six Months

@@ -429,7 +429,7 @@ def fill_text_fields(page, data: dict):
         insert_bottom_right_full_line(page, x, y, companion_name, BOTTOM_LABEL_FONT_SIZE)
     
     # Bottom left: dynamic label from visa type (duration derived per ZERP-58,
-    # e.g. "Two Entry 6M AED 465")
+    # e.g. "Two Entry 6M AED 460")
     visa = data.get("visa_info", {})
     visa_type = visa.get("type") or ""
     label_text = get_bottom_left_label(visa_type)
