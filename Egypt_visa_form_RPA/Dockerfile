@@ -86,6 +86,18 @@ EXPOSE 8080
 ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
 
-# Run Flask app with proper binding and verbose logging
-# Use shell form to allow variable expansion
-CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 300 --log-level debug --access-logfile - --error-logfile - app:app
+# Run Flask app with proper binding and verbose logging.
+#
+# --max-requests 50 / --max-requests-jitter 10:
+#   Recycle the single gunicorn worker every ~40-60 requests. Selenium +
+#   headless Chrome are notorious for leaking processes/RAM across runs,
+#   and we run with --workers 1 so there's no second process to compensate.
+#   Without recycling, the container's RSS climbs until it OOMs, Railway
+#   exhausts restartPolicyMaxRetries, and the service stays 502 until a
+#   manual redeploy (this is the failure mode that hit us on 2026-05-20).
+#   Worker restart is fast (~1-2s) and only interrupts an in-flight request
+#   if the request takes longer than --graceful-timeout, which the default
+#   30s comfortably covers for our typical PDF jobs.
+#
+# Use shell form to allow variable expansion.
+CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 300 --max-requests 50 --max-requests-jitter 10 --log-level debug --access-logfile - --error-logfile - app:app

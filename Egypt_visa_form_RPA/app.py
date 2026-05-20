@@ -261,12 +261,85 @@ def _run_generate_and_callback(application_data: dict, callback_url: str, record
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint for Railway"""
+    """Lightweight liveness check (does NOT exercise Chrome).
+
+    Cheap enough for external uptime monitors to poll every few seconds —
+    only confirms that gunicorn + Flask are responsive. Railway's deploy
+    healthcheck points at /health/deep so a broken Chrome / chromedriver
+    install fails the deploy instead of silently shipping a 502.
+    """
     return jsonify({
         'status': 'healthy',
         'service': 'Egypt Visa Form RPA',
         'timestamp': datetime.now().isoformat()
     }), 200
+
+
+@app.route('/health/deep', methods=['GET'])
+def deep_health_check():
+    """Readiness check that actually launches Chrome.
+
+    Used by Railway's deploy healthcheck (see railway.toml). Catches the
+    chronic "Chrome + chromedriver versions drifted" failure mode at
+    deploy time so we don't silently roll out a broken container. Also
+    useful as a manual smoke test after a redeploy:
+
+        curl https://travel-to-egypt-rpa-production.up.railway.app/health/deep
+
+    The lightweight /health endpoint is preserved for high-frequency
+    pings (uptime monitors etc.) — this one is intentionally heavier
+    (~5-10s) so don't wire it into anything that polls often.
+    """
+    started = datetime.now()
+    driver = None
+    try:
+        # Imported lazily so a misconfigured Selenium install doesn't crash
+        # the module at boot — we want /health (the cheap one) to still
+        # work even when Chrome is broken, so the operator can tell the
+        # difference between "container down" and "Chrome broken".
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+
+        opts = Options()
+        opts.add_argument("--headless=new")
+        opts.add_argument("--no-sandbox")
+        opts.add_argument("--disable-dev-shm-usage")
+        opts.add_argument("--disable-gpu")
+        opts.add_argument("--window-size=800,600")
+
+        driver = webdriver.Chrome(options=opts)
+        driver.set_page_load_timeout(15)
+        driver.get("about:blank")
+        # Any round-trip property access proves the driver-browser link is
+        # actually working, not just that the process started.
+        _ = driver.title
+
+        elapsed_ms = int((datetime.now() - started).total_seconds() * 1000)
+        return jsonify({
+            'status': 'healthy',
+            'service': 'Egypt Visa Form RPA',
+            'chrome': 'ok',
+            'elapsed_ms': elapsed_ms,
+            'timestamp': datetime.now().isoformat(),
+        }), 200
+    except Exception as e:
+        elapsed_ms = int((datetime.now() - started).total_seconds() * 1000)
+        logger.exception("Deep health check failed after %dms", elapsed_ms)
+        return jsonify({
+            'status': 'unhealthy',
+            'service': 'Egypt Visa Form RPA',
+            'chrome': 'failed',
+            'error': str(e),
+            'error_type': type(e).__name__,
+            'elapsed_ms': elapsed_ms,
+            'timestamp': datetime.now().isoformat(),
+        }), 503
+    finally:
+        if driver is not None:
+            try:
+                driver.quit()
+            except Exception:
+                pass
 
 
 def _get_redis():

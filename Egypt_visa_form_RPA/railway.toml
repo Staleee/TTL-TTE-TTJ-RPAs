@@ -2,7 +2,15 @@
 builder = "DOCKERFILE"
 
 [deploy]
-healthcheckPath = "/health"
+# Point Railway at the deep healthcheck so a broken Chrome / chromedriver
+# install (the chronic risk on this service) fails the deploy instead of
+# silently shipping a container that 502s on the first real visa request.
+# /health stays available as a lightweight ping for external uptime checks.
+healthcheckPath = "/health/deep"
 healthcheckTimeout = 300
+# A single bad request used to OOM-kill the worker; 3 retries was enough to
+# turn one transient crash into a *permanent* 502 (the service stays down
+# until manual redeploy). Bumping to 10 lets Railway keep restarting long
+# enough for the gunicorn --max-requests recycling to clear leaked state.
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3
+restartPolicyMaxRetries = 10
