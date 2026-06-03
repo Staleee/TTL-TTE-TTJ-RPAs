@@ -256,10 +256,19 @@ class EgyptVisaFormAutomation:
             self.logger.error(f"Error filling date field {field_name}: {e}")
             raise
     
+    def _log_select_options(self, select: Select, label: str):
+        """Log all available options in a <select> element for debugging."""
+        options = [o.text for o in select.options]
+        self.logger.info(f"[DROPDOWN DEBUG] {label} — {len(options)} option(s): {options}")
+
     def fill_date_dropdowns(self, base_field_name: str, date_value: str):
         """Fill date using separate month/day/year dropdowns"""
         try:
             date_obj = datetime.strptime(date_value, '%Y-%m-%d')
+            self.logger.info(
+                f"[fill_date_dropdowns] field='{base_field_name}' raw='{date_value}' "
+                f"parsed={date_obj.year}-{date_obj.month:02d}-{date_obj.day:02d}"
+            )
             
             # Month mapping (English month names)
             months = {
@@ -277,38 +286,55 @@ class EgyptVisaFormAutomation:
                 12: "ديسمبر / December"
             }
             
-            # Fill month
-            month_selector = self.config['form_selectors'][f'{base_field_name}_month']
-            month_element = self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, month_selector))
-            )
-            month_select = Select(month_element)
-            month_select.select_by_visible_text(months[date_obj.month])
-            self.logger.debug(f"Selected month: {months[date_obj.month]}")
-            
-            # Fill day
-            day_selector = self.config['form_selectors'][f'{base_field_name}_day']
-            day_element = self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, day_selector))
-            )
-            day_select = Select(day_element)
-            day_select.select_by_visible_text(str(date_obj.day))
-            self.logger.debug(f"Selected day: {date_obj.day}")
-            
-            # Fill year
+            # Select year FIRST so the form knows the year before filtering month/day options
+            # (critical for leap years: Feb 29 only appears after the year is known)
             year_selector = self.config['form_selectors'][f'{base_field_name}_year']
+            self.logger.info(f"[fill_date_dropdowns] Locating year dropdown via selector: '{year_selector}'")
             year_element = self.wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, year_selector))
             )
             year_select = Select(year_element)
-            year_select.select_by_visible_text(str(date_obj.year))
-            self.logger.debug(f"Selected year: {date_obj.year}")
+            target_year = str(date_obj.year)
+            self._log_select_options(year_select, f"{base_field_name}_year")
+            self.logger.info(f"[fill_date_dropdowns] Selecting year text: '{target_year}'")
+            year_select.select_by_visible_text(target_year)
+            self.logger.info(f"[fill_date_dropdowns] Year selected OK: '{target_year}'")
+            time.sleep(0.3)  # Allow form to update month options after year change
+
+            # Fill month
+            month_selector = self.config['form_selectors'][f'{base_field_name}_month']
+            self.logger.info(f"[fill_date_dropdowns] Locating month dropdown via selector: '{month_selector}'")
+            month_element = self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, month_selector))
+            )
+            month_select = Select(month_element)
+            target_month = months[date_obj.month]
+            self._log_select_options(month_select, f"{base_field_name}_month")
+            self.logger.info(f"[fill_date_dropdowns] Selecting month text: '{target_month}'")
+            month_select.select_by_visible_text(target_month)
+            self.logger.info(f"[fill_date_dropdowns] Month selected OK: '{target_month}'")
+            time.sleep(0.3)  # Allow form to update day options after month change
+
+            # Fill day last so the correct number of days is available
+            day_selector = self.config['form_selectors'][f'{base_field_name}_day']
+            self.logger.info(f"[fill_date_dropdowns] Locating day dropdown via selector: '{day_selector}'")
+            day_element = self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, day_selector))
+            )
+            day_select = Select(day_element)
+            target_day = str(date_obj.day)
+            self._log_select_options(day_select, f"{base_field_name}_day")
+            self.logger.info(f"[fill_date_dropdowns] Selecting day text: '{target_day}'")
+            day_select.select_by_visible_text(target_day)
+            self.logger.info(f"[fill_date_dropdowns] Day selected OK: '{target_day}'")
             
         except ValueError as e:
-            self.logger.error(f"Invalid date format for {base_field_name}: {date_value}")
+            self.logger.error(f"[fill_date_dropdowns] Invalid date format for '{base_field_name}': '{date_value}' — {e}")
             raise
         except Exception as e:
-            self.logger.error(f"Error filling date dropdowns for {base_field_name}: {e}")
+            self.logger.error(
+                f"[fill_date_dropdowns] FAILED for field='{base_field_name}' date='{date_value}' — {e}"
+            )
             raise
     
     def fill_passport_date(self, field_name: str, date_value: str):
@@ -342,33 +368,78 @@ class EgyptVisaFormAutomation:
                 dropdown_index = 2  # Third set of dropdowns
             else:
                 dropdown_index = 0
+
+            self.logger.info(
+                f"[fill_passport_date] field='{field_name}' raw='{date_value}' "
+                f"parsed={date_obj.year}-{date_obj.month:02d}-{date_obj.day:02d} "
+                f"dropdown_index={dropdown_index}"
+            )
             
-            # Find all month dropdowns
-            month_elements = self.driver.find_elements(By.CSS_SELECTOR, "select[name='birthday[month]']")
-            if len(month_elements) > dropdown_index:
-                month_select = Select(month_elements[dropdown_index])
-                month_select.select_by_visible_text(months[date_obj.month])
-                self.logger.debug(f"Selected {field_name} month: {months[date_obj.month]}")
-            
-            # Find all day dropdowns
-            day_elements = self.driver.find_elements(By.CSS_SELECTOR, "select[name='birthday[day]']")
-            if len(day_elements) > dropdown_index:
-                day_select = Select(day_elements[dropdown_index])
-                day_select.select_by_visible_text(str(date_obj.day))
-                self.logger.debug(f"Selected {field_name} day: {date_obj.day}")
-            
-            # Find all year dropdowns
+            # Select year FIRST so the form knows the year before filtering month/day options
+            # (critical for leap years: Feb 29 only appears after the year is known)
             year_elements = self.driver.find_elements(By.CSS_SELECTOR, "select[name='birthday[year]']")
+            self.logger.info(
+                f"[fill_passport_date] Found {len(year_elements)} birthday[year] dropdown(s) on page"
+            )
             if len(year_elements) > dropdown_index:
                 year_select = Select(year_elements[dropdown_index])
-                year_select.select_by_visible_text(str(date_obj.year))
-                self.logger.debug(f"Selected {field_name} year: {date_obj.year}")
+                target_year = str(date_obj.year)
+                self._log_select_options(year_select, f"{field_name}_year[idx={dropdown_index}]")
+                self.logger.info(f"[fill_passport_date] Selecting year text: '{target_year}'")
+                year_select.select_by_visible_text(target_year)
+                self.logger.info(f"[fill_passport_date] Year selected OK: '{target_year}'")
+                time.sleep(0.3)  # Allow form to update month options after year change
+            else:
+                self.logger.warning(
+                    f"[fill_passport_date] Not enough year dropdowns: needed index {dropdown_index}, "
+                    f"found {len(year_elements)}"
+                )
+
+            # Find all month dropdowns
+            month_elements = self.driver.find_elements(By.CSS_SELECTOR, "select[name='birthday[month]']")
+            self.logger.info(
+                f"[fill_passport_date] Found {len(month_elements)} birthday[month] dropdown(s) on page"
+            )
+            if len(month_elements) > dropdown_index:
+                month_select = Select(month_elements[dropdown_index])
+                target_month = months[date_obj.month]
+                self._log_select_options(month_select, f"{field_name}_month[idx={dropdown_index}]")
+                self.logger.info(f"[fill_passport_date] Selecting month text: '{target_month}'")
+                month_select.select_by_visible_text(target_month)
+                self.logger.info(f"[fill_passport_date] Month selected OK: '{target_month}'")
+                time.sleep(0.3)  # Allow form to update day options after month change
+            else:
+                self.logger.warning(
+                    f"[fill_passport_date] Not enough month dropdowns: needed index {dropdown_index}, "
+                    f"found {len(month_elements)}"
+                )
+
+            # Find all day dropdowns
+            day_elements = self.driver.find_elements(By.CSS_SELECTOR, "select[name='birthday[day]']")
+            self.logger.info(
+                f"[fill_passport_date] Found {len(day_elements)} birthday[day] dropdown(s) on page"
+            )
+            if len(day_elements) > dropdown_index:
+                day_select = Select(day_elements[dropdown_index])
+                target_day = str(date_obj.day)
+                self._log_select_options(day_select, f"{field_name}_day[idx={dropdown_index}]")
+                self.logger.info(f"[fill_passport_date] Selecting day text: '{target_day}'")
+                day_select.select_by_visible_text(target_day)
+                self.logger.info(f"[fill_passport_date] Day selected OK: '{target_day}'")
+            else:
+                self.logger.warning(
+                    f"[fill_passport_date] Not enough day dropdowns: needed index {dropdown_index}, "
+                    f"found {len(day_elements)}"
+                )
             
         except ValueError as e:
-            self.logger.error(f"Invalid date format for {field_name}: {date_value}")
+            self.logger.error(f"[fill_passport_date] Invalid date format for '{field_name}': '{date_value}' — {e}")
             raise
         except Exception as e:
-            self.logger.error(f"Error filling passport date {field_name}: {e}")
+            self.logger.error(
+                f"[fill_passport_date] FAILED for field='{field_name}' date='{date_value}' "
+                f"dropdown_index={dropdown_index if 'dropdown_index' in dir() else '?'} — {e}"
+            )
             raise
     
     def fill_arrival_date(self, date_value: str):
@@ -393,33 +464,75 @@ class EgyptVisaFormAutomation:
             }
             
             dropdown_index = 3  # Fourth set of dropdowns (0-based index)
+
+            self.logger.info(
+                f"[fill_arrival_date] raw='{date_value}' "
+                f"parsed={date_obj.year}-{date_obj.month:02d}-{date_obj.day:02d} "
+                f"dropdown_index={dropdown_index}"
+            )
             
-            # Find all month dropdowns
-            month_elements = self.driver.find_elements(By.CSS_SELECTOR, "select[name='birthday[month]']")
-            if len(month_elements) > dropdown_index:
-                month_select = Select(month_elements[dropdown_index])
-                month_select.select_by_visible_text(months[date_obj.month])
-                self.logger.debug(f"Selected arrival month: {months[date_obj.month]}")
-            
-            # Find all day dropdowns
-            day_elements = self.driver.find_elements(By.CSS_SELECTOR, "select[name='birthday[day]']")
-            if len(day_elements) > dropdown_index:
-                day_select = Select(day_elements[dropdown_index])
-                day_select.select_by_visible_text(str(date_obj.day))
-                self.logger.debug(f"Selected arrival day: {date_obj.day}")
-            
-            # Find all year dropdowns
+            # Select year FIRST so the form knows the year before filtering month/day options
+            # (critical for leap years: Feb 29 only appears after the year is known)
             year_elements = self.driver.find_elements(By.CSS_SELECTOR, "select[name='birthday[year]']")
+            self.logger.info(
+                f"[fill_arrival_date] Found {len(year_elements)} birthday[year] dropdown(s) on page"
+            )
             if len(year_elements) > dropdown_index:
                 year_select = Select(year_elements[dropdown_index])
-                year_select.select_by_visible_text(str(date_obj.year))
-                self.logger.debug(f"Selected arrival year: {date_obj.year}")
+                target_year = str(date_obj.year)
+                self._log_select_options(year_select, f"arrival_year[idx={dropdown_index}]")
+                self.logger.info(f"[fill_arrival_date] Selecting year text: '{target_year}'")
+                year_select.select_by_visible_text(target_year)
+                self.logger.info(f"[fill_arrival_date] Year selected OK: '{target_year}'")
+                time.sleep(0.3)  # Allow form to update month options after year change
+            else:
+                self.logger.warning(
+                    f"[fill_arrival_date] Not enough year dropdowns: needed index {dropdown_index}, "
+                    f"found {len(year_elements)}"
+                )
+
+            # Find all month dropdowns
+            month_elements = self.driver.find_elements(By.CSS_SELECTOR, "select[name='birthday[month]']")
+            self.logger.info(
+                f"[fill_arrival_date] Found {len(month_elements)} birthday[month] dropdown(s) on page"
+            )
+            if len(month_elements) > dropdown_index:
+                month_select = Select(month_elements[dropdown_index])
+                target_month = months[date_obj.month]
+                self._log_select_options(month_select, f"arrival_month[idx={dropdown_index}]")
+                self.logger.info(f"[fill_arrival_date] Selecting month text: '{target_month}'")
+                month_select.select_by_visible_text(target_month)
+                self.logger.info(f"[fill_arrival_date] Month selected OK: '{target_month}'")
+                time.sleep(0.3)  # Allow form to update day options after month change
+            else:
+                self.logger.warning(
+                    f"[fill_arrival_date] Not enough month dropdowns: needed index {dropdown_index}, "
+                    f"found {len(month_elements)}"
+                )
+
+            # Find all day dropdowns
+            day_elements = self.driver.find_elements(By.CSS_SELECTOR, "select[name='birthday[day]']")
+            self.logger.info(
+                f"[fill_arrival_date] Found {len(day_elements)} birthday[day] dropdown(s) on page"
+            )
+            if len(day_elements) > dropdown_index:
+                day_select = Select(day_elements[dropdown_index])
+                target_day = str(date_obj.day)
+                self._log_select_options(day_select, f"arrival_day[idx={dropdown_index}]")
+                self.logger.info(f"[fill_arrival_date] Selecting day text: '{target_day}'")
+                day_select.select_by_visible_text(target_day)
+                self.logger.info(f"[fill_arrival_date] Day selected OK: '{target_day}'")
+            else:
+                self.logger.warning(
+                    f"[fill_arrival_date] Not enough day dropdowns: needed index {dropdown_index}, "
+                    f"found {len(day_elements)}"
+                )
             
         except ValueError as e:
-            self.logger.error(f"Invalid date format for arrival date: {date_value}")
+            self.logger.error(f"[fill_arrival_date] Invalid date format: '{date_value}' — {e}")
             raise
         except Exception as e:
-            self.logger.error(f"Error filling arrival date: {e}")
+            self.logger.error(f"[fill_arrival_date] FAILED for date='{date_value}' — {e}")
             raise
     
     def take_screenshot(self, name: str):
